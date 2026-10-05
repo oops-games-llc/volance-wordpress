@@ -1,0 +1,23 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Dependencies / build
+node_modules/
+vendor/
+composer.lock
+
+# Local WordPress test envs
+/wp/
+wordpress/
+.htaccess.local
+
+# Editors
+.idea/
+.vscode/
