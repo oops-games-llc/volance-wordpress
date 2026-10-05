@@ -1,0 +1,54 @@
+#!/bin/sh
+# Repo guard: this repository is the WordPress plugin ONLY.
+#
+# It refuses to push to the Volance monorepo remote, and refuses to push files
+# that belong to the monorepo (functions/, packages/, apps/, mockups/, the
+# Firebase/pnpm config, and the product/setup/website/team docs).
+#
+# Enable once per clone:
+#   git config core.hooksPath githooks
+
+set -u
+
+url="$2"
+
+case "$url" in
+	*oops-games-llc/volance-wordpress*)
+		: # expected remote
+		;;
+	*oops-games-llc/volance*)
+		echo "pre-push: refusing to push to the monorepo remote:" >&2
+		echo "          $url" >&2
+		echo "          This is the WordPress plugin. Push to oops-games-llc/volance-wordpress." >&2
+		exit 1
+		;;
+	*)
+		echo "pre-push: unexpected remote '$url'." >&2
+		echo "          Expected oops-games-llc/volance-wordpress." >&2
+		exit 1
+		;;
+esac
+
+z40="0000000000000000000000000000000000000000"
+status=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+	[ -z "${local_sha:-}" ] && continue
+	[ "$local_sha" = "$z40" ] && continue
+
+	if [ "$remote_sha" = "$z40" ]; then
+		files=$(git log --pretty=format: --name-only "$local_sha" --not --remotes 2>/dev/null)
+	else
+		files=$(git diff --name-only "$remote_sha..$local_sha" 2>/dev/null)
+	fi
+	[ -z "$files" ] && continue
+
+	bad=$(printf '%s\n' "$files" | grep -E '^(functions|packages|apps|mockups)/|^(firestore\.rules|firestore\.indexes\.json|firebase\.json|\.firebaserc|pnpm-workspace\.yaml)$|^docs/(product|setup|website|team)/' || true)
+	if [ -n "$bad" ]; then
+		echo "pre-push: these belong to the Volance monorepo and must not go in this plugin repo:" >&2
+		printf '%s\n' "$bad" | sed 's/^/          /' >&2
+		status=1
+	fi
+done
+
+exit $status

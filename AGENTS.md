@@ -9,6 +9,20 @@ signals to the Volance API and logs the human-likeness score in wp-admin.
 
 It is **observe-only**: it never blocks, never redirects, and fails open.
 
+## Repo boundaries
+
+This repository is the WordPress plugin **only**. It is separate from the Volance
+monorepo (`oops-games-llc/volance`), which owns `functions/`, `packages/`,
+`apps/`, `mockups/`, the Firebase/pnpm config, and the `docs/product`,
+`docs/setup`, `docs/website`, `docs/team` docs. **Never add monorepo code here**,
+and never push this repo to the monorepo remote.
+
+`githooks/pre-push` enforces both. Enable it once per clone:
+
+```
+git config core.hooksPath githooks
+```
+
 ## Hard rules
 
 - **Observe-only.** Do not add blocking, enforcement, redirects, or challenge UI.
