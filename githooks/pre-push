@@ -43,12 +43,24 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 	fi
 	[ -z "$files" ] && continue
 
-	bad=$(printf '%s\n' "$files" | grep -E '^(functions|packages|apps|mockups)/|^(firestore\.rules|firestore\.indexes\.json|firebase\.json|\.firebaserc|pnpm-workspace\.yaml)$|^docs/(product|setup|website|team)/' || true)
-	if [ -n "$bad" ]; then
-		echo "pre-push: these belong to the Volance monorepo and must not go in this plugin repo:" >&2
-		printf '%s\n' "$bad" | sed 's/^/          /' >&2
-		status=1
-	fi
+	flagged=0
+	while IFS= read -r f; do
+		[ -z "$f" ] && continue
+		case "$f" in
+			functions/*|packages/*|apps/*|mockups/*|\
+			docs/product/*|docs/setup/*|docs/website/*|docs/team/*|\
+			firestore.rules|firestore.indexes.json|firebase.json|.firebaserc|pnpm-workspace.yaml)
+				if [ "$flagged" = 0 ]; then
+					echo "pre-push: these belong to the Volance monorepo and must not go in this plugin repo:" >&2
+					flagged=1
+					status=1
+				fi
+				echo "          $f" >&2
+				;;
+		esac
+	done <<EOF
+$files
+EOF
 done
 
 exit $status
