@@ -1,5 +1,5 @@
 === Volance Detection ===
-Contributors: oopsgames
+Contributors: thisissohard002
 Tags: bot detection, agents, form security, spam
 Requires at least: 6.0
 Tested up to: 6.7
