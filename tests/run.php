@@ -145,6 +145,23 @@ check( 'allowlisted clientSignals kept', 1280 === $clean['clientSignals']['inner
 check( 'keys nested under clientSignals, bad dwell dropped', array( 1, 2 ) === $clean['clientSignals']['keys']['dwells'] && 3 === $clean['clientSignals']['keys']['count'] );
 check( 'prog nested and filtered', array( 'paste' => 1 ) === $clean['clientSignals']['prog'] );
 
+// Current collector shape (Volance PR #98): keys/prog already inside clientSignals.
+$nested = Volance_Detection_Evidence::sanitize_snapshot(
+	json_encode(
+		array(
+			'clientSignals' => array(
+				'webdriver'    => false,
+				'sessionDwell' => 5000,
+				'keys'         => array( 'count' => 4, 'firstT' => 5, 'lastT' => 80, 'dwells' => array( 30, 'x', 40 ), 'flight' => array( 12 ) ),
+				'prog'         => array( 'detailZeroClicks' => 2, 'evil' => 9 ),
+			),
+			'events'        => array( array( 'type' => 'click', 't' => 200, 'x' => 11, 'y' => 21 ) ),
+		)
+	)
+);
+check( 'nested keys kept and filtered', is_array( $nested ) && array( 30, 40 ) === $nested['clientSignals']['keys']['dwells'] && 4 === $nested['clientSignals']['keys']['count'] );
+check( 'nested prog kept and filtered', array( 'detailZeroClicks' => 2 ) === $nested['clientSignals']['prog'] );
+
 check( 'invalid JSON rejected', null === Volance_Detection_Evidence::sanitize_snapshot( '{nope' ) );
 check( 'non-string rejected', null === Volance_Detection_Evidence::sanitize_snapshot( array() ) );
 check( 'empty string rejected', null === Volance_Detection_Evidence::sanitize_snapshot( '' ) );

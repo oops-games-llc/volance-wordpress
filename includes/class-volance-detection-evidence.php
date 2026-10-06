@@ -133,8 +133,9 @@ class Volance_Detection_Evidence {
 		$raw_client = ( isset( $data['clientSignals'] ) && is_array( $data['clientSignals'] ) ) ? $data['clientSignals'] : array();
 		$raw_events = ( isset( $data['events'] ) && is_array( $data['events'] ) ) ? $data['events'] : array();
 
-		// The collector returns keystroke cadence and programmatic-event counters
-		// beside clientSignals; the Volance schema accepts them inside it.
+		// The Volance schema reads keystroke cadence and programmatic-event counters
+		// from inside clientSignals. Current collectors already nest them there; older
+		// builds returned them beside clientSignals, so lift those in as a fallback.
 		foreach ( array( 'keys', 'prog' ) as $nested ) {
 			if ( ! isset( $raw_client[ $nested ] ) && isset( $data[ $nested ] ) ) {
 				$raw_client[ $nested ] = $data[ $nested ];
