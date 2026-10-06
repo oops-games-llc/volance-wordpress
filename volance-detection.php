@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:       Volance Detection
- * Plugin URI:        https://volance.com
+ * Plugin URI:        https://github.com/oops-games-llc/volance-wordpress
  * Description:       Observe-only: relays consented form-submission signals to Volance and logs the human-likeness score in wp-admin. Never blocks; fails open.
  * Version:           0.1.0
  * Requires at least: 6.0
