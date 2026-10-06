@@ -239,7 +239,12 @@ class Volance_Detection_Evidence {
 					}
 				}
 			}
-			foreach ( array( 'count' => self::MAX_COUNT, 'firstT' => self::MAX_TIME, 'lastT' => self::MAX_TIME ) as $field => $max ) {
+			$key_limits = array(
+				'count'  => self::MAX_COUNT,
+				'firstT' => self::MAX_TIME,
+				'lastT'  => self::MAX_TIME,
+			);
+			foreach ( $key_limits as $field => $max ) {
 				if ( isset( $raw['keys'][ $field ] ) ) {
 					$num = self::number( $raw['keys'][ $field ], 0, $max );
 					if ( null !== $num ) {

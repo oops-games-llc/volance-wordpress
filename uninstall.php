@@ -37,18 +37,26 @@ function volance_detection_uninstall_site() {
 	}
 	wp_clear_scheduled_hook( 'volance_detection_daily' );
 
-	$volance_table = $wpdb->prefix . 'volance_detection_log';
+	$volance_table = esc_sql( $wpdb->prefix . 'volance_detection_log' );
 	// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.SchemaChange -- uninstall of the plugin's own table.
 	$wpdb->query( "DROP TABLE IF EXISTS {$volance_table}" );
 }
 
-if ( is_multisite() ) {
-	$volance_site_ids = get_sites( array( 'fields' => 'ids' ) );
-	foreach ( $volance_site_ids as $volance_site_id ) {
+/**
+ * Run the cleanup on every site of a network, or on the single site.
+ *
+ * @return void
+ */
+function volance_detection_uninstall() {
+	if ( ! is_multisite() ) {
+		volance_detection_uninstall_site();
+		return;
+	}
+	foreach ( get_sites( array( 'fields' => 'ids' ) ) as $volance_site_id ) {
 		switch_to_blog( $volance_site_id );
 		volance_detection_uninstall_site();
 		restore_current_blog();
 	}
-} else {
-	volance_detection_uninstall_site();
 }
+
+volance_detection_uninstall();
