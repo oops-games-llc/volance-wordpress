@@ -134,7 +134,7 @@ class Volance_Detection_Admin {
 		$tab  = ( isset( $_GET['tab'] ) && 'activity' === sanitize_key( wp_unslash( $_GET['tab'] ) ) ) ? 'activity' : 'settings';
 		$base = admin_url( 'options-general.php?page=' . self::PAGE );
 
-		echo '<div class="wrap"><h1>' . esc_html__( 'Volance Detection', 'volance-detection' ) . '</h1>';
+		echo '<div class="wrap"><h1><img src="' . esc_url( VOLANCE_DETECTION_URL . 'assets/images/volance-logo.png' ) . '" alt="" width="32" height="32" style="vertical-align:middle;margin-right:10px;border-radius:6px;" />' . esc_html__( 'Volance Detection', 'volance-detection' ) . '</h1>';
 		echo '<nav class="nav-tab-wrapper">';
 		echo '<a class="nav-tab' . ( 'settings' === $tab ? ' nav-tab-active' : '' ) . '" href="' . esc_url( $base ) . '">' . esc_html__( 'Settings', 'volance-detection' ) . '</a>';
 		echo '<a class="nav-tab' . ( 'activity' === $tab ? ' nav-tab-active' : '' ) . '" href="' . esc_url( add_query_arg( 'tab', 'activity', $base ) ) . '">' . esc_html__( 'Activity', 'volance-detection' ) . '</a>';
