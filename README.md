@@ -19,8 +19,7 @@ collector from `https://app.volance.com/trace.js` only after consent.
 ## Status
 
 Connector implemented on `feat/connector` (settings, consent notice, relay,
-activity log, usage line). Not yet released. Open items before a WordPress.org
-submission are tracked in `docs/`.
+activity log, usage line). Not yet released or submitted to WordPress.org.
 
 ## How it works
 
