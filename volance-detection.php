@@ -23,70 +23,78 @@ define( 'VOLANCE_DETECTION_FILE', __FILE__ );
 define( 'VOLANCE_DETECTION_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VOLANCE_DETECTION_URL', plugin_dir_url( __FILE__ ) );
 
-/** API + collector hosts. The collector is content-addressed for pinning. */
+/**
+ * API and collector hosts.
+ *
+ * The collector is loaded from the stable /trace.js alias on purpose: a pinned
+ * content-hashed URL can stop resolving after a collector release.
+ */
 define( 'VOLANCE_DETECTION_API_BASE', 'https://app.volance.com' );
 define( 'VOLANCE_DETECTION_COLLECTOR', 'https://app.volance.com/trace.js' );
 
-/**
- * Default option values.
- *
- * @return array
- */
-function volance_detection_defaults() {
-	return array(
-		'public_key'       => '',
-		'secret_key'       => '',
-		'enabled'          => false,
-		'consent_required' => true,
-	);
-}
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-settings.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-evidence.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-client.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-state.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-log.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-scorer.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-forms.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-frontend.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-admin.php';
 
 /**
- * Seed options on activation without clobbering existing values.
+ * Activation: seed options, create the log table and schedule the daily job.
  *
  * @return void
  */
 function volance_detection_activate() {
-	$current = get_option( 'volance_detection_settings', array() );
-	add_option(
-		'volance_detection_settings',
-		array_merge( volance_detection_defaults(), is_array( $current ) ? $current : array() )
-	);
+	add_option( Volance_Detection_Settings::OPTION, Volance_Detection_Settings::defaults() );
+	Volance_Detection_Log::install();
+	if ( ! wp_next_scheduled( 'volance_detection_daily' ) ) {
+		wp_schedule_event( time() + HOUR_IN_SECONDS, 'twicedaily', 'volance_detection_daily' );
+	}
 }
 register_activation_hook( __FILE__, 'volance_detection_activate' );
 
 /**
- * Read the plugin settings.
+ * Deactivation: stop the scheduled job. Data and settings are kept.
  *
- * @return array
+ * @return void
  */
-function volance_detection_settings() {
-	$stored = get_option( 'volance_detection_settings', array() );
-	return array_merge( volance_detection_defaults(), is_array( $stored ) ? $stored : array() );
+function volance_detection_deactivate() {
+	wp_clear_scheduled_hook( 'volance_detection_daily' );
 }
+register_deactivation_hook( __FILE__, 'volance_detection_deactivate' );
 
 /**
- * Whether collection may run: enabled, both keys present, and consent given.
+ * Daily job: purge old log rows and refresh the workspace's fingerprint flag.
  *
- * @param bool $consent Visitor consent.
- * @return bool
+ * @return void
  */
-function volance_detection_may_collect( $consent ) {
-	$settings = volance_detection_settings();
-	return ! empty( $settings['enabled'] )
-		&& true === (bool) $consent
-		&& '' !== $settings['public_key']
-		&& '' !== $settings['secret_key'];
+function volance_detection_run_daily() {
+	Volance_Detection_Log::purge();
+	if ( Volance_Detection_Settings::is_ready() ) {
+		$client = new Volance_Detection_Client( Volance_Detection_Settings::public_key(), Volance_Detection_Settings::secret_key() );
+		$state  = new Volance_Detection_State();
+		$result = $client->session();
+		if ( $result['ok'] && isset( $result['data']['collect'] ) && is_array( $result['data']['collect'] ) ) {
+			$state->set_fingerprints( true === ( $result['data']['collect']['fingerprints'] ?? false ) );
+		}
+	}
 }
+add_action( 'volance_detection_daily', 'volance_detection_run_daily' );
 
-/*
- * TODO(connector) — implement the observe-only flow:
- *   1. A Settings page (Settings → Volance Detection) for the pk_/sk_ keys and
- *      the consent toggle; sanitize and nonce every field.
- *   2. After consent, enqueue VOLANCE_DETECTION_COLLECTOR as a module and start
- *      it with { consent: true }. Never load it before consent.
- *   3. On form submit, POST the snapshot from PHP (never the browser) to
- *      VOLANCE_DETECTION_API_BASE . '/api/trace/score' with the sk_ key.
- *   4. Log the score/verdict in the admin. Never block; fail open on any error.
- * See AGENTS.md and docs/consent-and-privacy.md for the exact boundaries and copy.
+/**
+ * Boot the plugin.
+ *
+ * @return void
  */
+function volance_detection_boot() {
+	Volance_Detection_Log::maybe_upgrade();
+	Volance_Detection_Forms::init();
+	Volance_Detection_Frontend::init();
+	if ( is_admin() ) {
+		Volance_Detection_Admin::init();
+	}
+}
+add_action( 'plugins_loaded', 'volance_detection_boot' );
