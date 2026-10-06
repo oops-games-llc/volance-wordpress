@@ -6,14 +6,30 @@ on:
 
 jobs:
   lint:
-    name: PHP lint
+    name: PHP lint (${{ matrix.php }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.0', '8.3']
     steps:
       - uses: actions/checkout@v5
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.0'
+          php-version: ${{ matrix.php }}
       - name: Lint
         run: |
           find . -name '*.php' -not -path './vendor/*' -print0 \
             | xargs -0 -n1 --no-run-if-empty php -l
+      - name: PHP tests
+        run: php tests/run.php
+
+  loader:
+    name: Consent loader tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Test
+        run: node tests/loader.test.mjs
