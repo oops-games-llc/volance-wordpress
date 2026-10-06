@@ -105,7 +105,7 @@ class Volance_Detection_Log {
 	 */
 	public static function rows( $page = 1, $per_page = 25, $status = '' ) {
 		global $wpdb;
-		$table  = self::table();
+		$table  = esc_sql( self::table() );
 		$offset = max( 0, ( (int) $page - 1 ) * (int) $per_page );
 		if ( '' !== $status ) {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- plugin's own table; name is not user input.
@@ -123,7 +123,7 @@ class Volance_Detection_Log {
 	 */
 	public static function count( $status = '' ) {
 		global $wpdb;
-		$table = self::table();
+		$table = esc_sql( self::table() );
 		if ( '' !== $status ) {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- plugin's own table; name is not user input.
 			return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE status = %s", $status ) );
@@ -140,7 +140,7 @@ class Volance_Detection_Log {
 	 */
 	public static function verdict_counts( $days = 7 ) {
 		global $wpdb;
-		$table = self::table();
+		$table = esc_sql( self::table() );
 		$since = gmdate( 'Y-m-d H:i:s', time() - ( (int) $days * DAY_IN_SECONDS ) );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- plugin's own table; name is not user input.
 		$rows   = (array) $wpdb->get_results( $wpdb->prepare( "SELECT verdict, COUNT(*) AS total FROM {$table} WHERE status = 'scored' AND created_at >= %s GROUP BY verdict", $since ) );
@@ -160,7 +160,7 @@ class Volance_Detection_Log {
 		global $wpdb;
 		$days   = max( 1, (int) apply_filters( 'volance_detection_log_days', 30 ) );
 		$cutoff = gmdate( 'Y-m-d H:i:s', time() - ( $days * DAY_IN_SECONDS ) );
-		$table  = self::table();
+		$table  = esc_sql( self::table() );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- plugin's own table; name is not user input.
 		$wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE created_at < %s", $cutoff ) );
 	}
@@ -172,7 +172,7 @@ class Volance_Detection_Log {
 	 */
 	public static function drop() {
 		global $wpdb;
-		$table = self::table();
+		$table = esc_sql( self::table() );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.SchemaChange -- uninstall of the plugin's own table.
 		$wpdb->query( "DROP TABLE IF EXISTS {$table}" );
 	}

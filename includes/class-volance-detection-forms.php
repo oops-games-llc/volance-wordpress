@@ -103,7 +103,7 @@ class Volance_Detection_Forms {
 		}
 		self::$queued[ $form ] = true;
 
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- read-only; the value is validated by Volance_Detection_Evidence before any use.
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- read-only; the JSON string is parsed and field-by-field validated by Volance_Detection_Evidence before any use.
 		$raw  = isset( $_POST[ self::FIELD ] ) ? wp_unslash( $_POST[ self::FIELD ] ) : '';
 		$json = is_string( $raw ) ? $raw : '';
 

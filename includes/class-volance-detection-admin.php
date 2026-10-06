@@ -108,8 +108,8 @@ class Volance_Detection_Admin {
 					$state->set_fingerprints( true === ( $collect['fingerprints'] ?? false ) );
 					$state->set_last_error( '' );
 					delete_transient( Volance_Detection_State::USAGE_CACHE );
-					$mode              = isset( $config['data']['mode'] ) && is_string( $config['data']['mode'] ) ? $config['data']['mode'] : '';
-					$result['ok']      = true;
+					$mode         = isset( $config['data']['mode'] ) && is_string( $config['data']['mode'] ) ? $config['data']['mode'] : '';
+					$result['ok'] = true;
 					/* translators: %s: Volance workspace mode, for example "monitor". */
 					$result['message'] = '' !== $mode ? sprintf( __( 'Connected. Workspace mode: %s.', 'volance-detection' ), $mode ) : __( 'Connected.', 'volance-detection' );
 				}
@@ -131,7 +131,7 @@ class Volance_Detection_Admin {
 			return;
 		}
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- tab selection only.
-		$tab = ( isset( $_GET['tab'] ) && 'activity' === sanitize_key( wp_unslash( $_GET['tab'] ) ) ) ? 'activity' : 'settings';
+		$tab  = ( isset( $_GET['tab'] ) && 'activity' === sanitize_key( wp_unslash( $_GET['tab'] ) ) ) ? 'activity' : 'settings';
 		$base = admin_url( 'options-general.php?page=' . self::PAGE );
 
 		echo '<div class="wrap"><h1>' . esc_html__( 'Volance Detection', 'volance-detection' ) . '</h1>';
@@ -358,7 +358,7 @@ class Volance_Detection_Admin {
 					'%s%s%s',
 					null !== $row->score ? number_format_i18n( (float) $row->score, 1 ) : '-',
 					'' !== $row->verdict ? ' (' . $row->verdict . ')' : '',
-					'' !== $row->label ? ', ' . $row->label : ''
+					( '' !== $row->label && $row->label !== $row->verdict ) ? ', ' . $row->label : ''
 				);
 			} else {
 				$result = $statuses[ $status ] ?? $status;
@@ -373,7 +373,7 @@ class Volance_Detection_Admin {
 			echo '<td>' . esc_html( (string) $row->form ) . '</td>';
 			echo '<td>' . esc_html( $result ) . '</td>';
 			echo '<td>' . esc_html( $evidence ) . '</td>';
-			echo '<td><code>' . esc_html( (string) $row->request_id ) . '</code></td>';
+			echo '' !== (string) $row->request_id ? '<td><code>' . esc_html( (string) $row->request_id ) . '</code></td>' : '<td></td>';
 			echo '<td>' . esc_html( (string) $row->note ) . '</td>';
 			echo '</tr>';
 		}
@@ -385,7 +385,17 @@ class Volance_Detection_Admin {
 			echo wp_kses_post(
 				paginate_links(
 					array(
-						'base'    => add_query_arg( 'paged', '%#%', add_query_arg( array( 'tab' => 'activity', 'status' => $filter ), $base ) ),
+						'base'    => add_query_arg(
+							'paged',
+							'%#%',
+							add_query_arg(
+								array(
+									'tab'    => 'activity',
+									'status' => $filter,
+								),
+								$base
+							)
+						),
 						'format'  => '',
 						'current' => $page,
 						'total'   => $pages,

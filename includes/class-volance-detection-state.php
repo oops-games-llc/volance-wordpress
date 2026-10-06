@@ -12,10 +12,10 @@ defined( 'ABSPATH' ) || exit;
  */
 class Volance_Detection_State {
 
-	const FLAGS_OPTION  = 'volance_detection_flags';
-	const BACKOFF_KEY   = 'volance_detection_backoff';
-	const LAST_ERROR    = 'volance_detection_last_error';
-	const USAGE_CACHE   = 'volance_detection_usage';
+	const FLAGS_OPTION = 'volance_detection_flags';
+	const BACKOFF_KEY  = 'volance_detection_backoff';
+	const LAST_ERROR   = 'volance_detection_last_error';
+	const USAGE_CACHE  = 'volance_detection_usage';
 
 	/**
 	 * Whether the Volance workspace has the fingerprint tier switched on.
