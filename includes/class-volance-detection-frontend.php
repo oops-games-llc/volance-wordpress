@@ -9,7 +9,7 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Prints the consent loader on the pages that have an observed form.
+ * Prints the consent loader on the pages that have a protected form.
  */
 class Volance_Detection_Frontend {
 
@@ -31,51 +31,50 @@ class Volance_Detection_Frontend {
 	}
 
 	/**
-	 * Whether the Volance workspace allows loading (fingerprint tier is off).
-	 *
-	 * @return bool
-	 */
-	private static function allowed() {
-		$state = new Volance_Detection_State();
-		return ! $state->fingerprints();
-	}
-
-	/**
 	 * Banner styles (only needed when the built-in banner is used).
 	 *
 	 * @return void
 	 */
 	public static function enqueue_style() {
 		$settings = Volance_Detection_Settings::get();
-		if ( 'banner' !== $settings['consent_mode'] || ! self::allowed() ) {
+		if ( 'banner' !== $settings['consent_mode'] ) {
 			return;
 		}
 		wp_enqueue_style( 'volance-detection', VOLANCE_DETECTION_URL . 'assets/css/banner.css', array(), VOLANCE_DETECTION_VERSION );
 	}
 
 	/**
-	 * Front-end pages: only singular pages whose comment form is observed.
+	 * Front-end pages that carry a protected form.
 	 *
 	 * @return void
 	 */
 	public static function print_front() {
-		if ( ! Volance_Detection_Settings::form_enabled( 'comments' ) || ! is_singular() || ! comments_open() ) {
-			return;
+		$comments = Volance_Detection_Settings::form_enabled( 'comments' ) && is_singular() && comments_open();
+		$shop     = ( Volance_Detection_Settings::form_enabled( 'wc_login' ) || Volance_Detection_Settings::form_enabled( 'wc_register' ) )
+			&& function_exists( 'is_account_page' ) && is_account_page();
+		$checkout = Volance_Detection_Settings::form_enabled( 'wc_checkout' ) && function_exists( 'is_checkout' ) && is_checkout();
+		// Contact Form 7 forms can sit on any page, so load on singular pages when it is protected.
+		$contact = Volance_Detection_Settings::form_enabled( 'cf7' ) && Volance_Detection_Settings::form_available( 'cf7' ) && is_singular();
+		$paths   = (bool) Volance_Detection_Paths::current_rule();
+		/**
+		 * Filter whether the collector loads on the current front-end page.
+		 *
+		 * @param bool $load Default decision.
+		 */
+		if ( apply_filters( 'volance_detection_load_collector', $comments || $shop || $checkout || $contact || $paths ) ) {
+			self::print_assets();
 		}
-		self::print_assets();
 	}
 
 	/**
-	 * Login screen: the login and registration forms only, never other actions.
+	 * Login screen: the login, registration and password-reset forms only, never other actions.
 	 *
 	 * @return void
 	 */
 	public static function print_login() {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- selects which core screen is showing; changes nothing.
 		$action = isset( $_REQUEST['action'] ) ? sanitize_key( wp_unslash( $_REQUEST['action'] ) ) : 'login';
-		if ( 'login' === $action && Volance_Detection_Settings::form_enabled( 'login' ) ) {
-			self::print_assets();
-		} elseif ( 'register' === $action && Volance_Detection_Settings::form_enabled( 'register' ) ) {
+		if ( in_array( $action, array( 'login', 'register', 'lostpassword' ), true ) && Volance_Detection_Settings::form_enabled( $action ) ) {
 			self::print_assets();
 		}
 	}
@@ -86,20 +85,26 @@ class Volance_Detection_Frontend {
 	 * @return void
 	 */
 	private static function print_assets() {
-		if ( ! self::allowed() ) {
-			return;
-		}
 		$settings = Volance_Detection_Settings::get();
-		$config   = array(
+		$state    = new Volance_Detection_State();
+		$tier_on  = $state->fingerprints();
+		$text     = __( 'We use an on-site script to estimate whether a form submission comes from a human, an agent, or a bot. It records interaction timing, pointer movement, and coarse browser and device details on this site only. It never records the characters you type, form values, or your clipboard. This data, your IP address and your browser headers are sent to our server, which passes them to Volance for scoring. Volance stores your IP only as a one-way hash. Nothing is collected unless you allow it.', 'volance-detection' );
+		if ( $tier_on ) {
+			$text .= ' ' . __( 'The script also reads a few device traits: whether a blank canvas test passes, how many fonts are installed, and the name of the graphics renderer.', 'volance-detection' );
+		}
+		$config = array(
 			'collector'      => VOLANCE_DETECTION_COLLECTOR,
+			'collect'        => array( 'fingerprints' => $tier_on ),
 			'consentMode'    => $settings['consent_mode'],
+			'injectForms'    => (bool) Volance_Detection_Paths::current_rule(),
 			'field'          => Volance_Detection_Forms::FIELD,
-			'storageKey'     => 'volanceDetectionConsent',
+			// Turning the fingerprint tier on or off changes what visitors agreed to, so it uses a separate key and the banner asks again.
+			'storageKey'     => $tier_on ? 'volanceDetectionConsentFp' : 'volanceDetectionConsent',
 			'sitePrivacyUrl' => function_exists( 'get_privacy_policy_url' ) ? get_privacy_policy_url() : '',
 			'volanceUrl'     => 'https://volance.com/privacy',
 			'strings'        => array(
 				'title'         => __( 'Bot detection (optional)', 'volance-detection' ),
-				'text'          => __( 'We use an on-site script to estimate whether a form submission comes from a human, an agent, or a bot. It records interaction timing, pointer movement, and coarse browser and device details on this site only. It never records the characters you type, form values, or your clipboard. This data, your IP address and your browser headers are sent to our server, which passes them to Volance for scoring. Volance stores your IP only as a one-way hash. Nothing is collected unless you allow it.', 'volance-detection' ),
+				'text'          => $text,
 				'allow'         => __( 'Allow', 'volance-detection' ),
 				'decline'       => __( 'Decline', 'volance-detection' ),
 				'sitePrivacy'   => __( 'Read our privacy policy', 'volance-detection' ),
@@ -128,7 +133,10 @@ class Volance_Detection_Frontend {
 			return;
 		}
 		$text = '<p class="privacy-policy-tutorial">' . esc_html__( 'Suggested wording if you use Volance Detection. Review it against your own practices.', 'volance-detection' ) . '</p>'
-			. '<p>' . esc_html__( 'We use Volance to estimate whether a form submission on this site comes from a human, an agent, or a bot. Collection happens only after you opt in. The script records interaction timing, pointer movement, and coarse browser and device details on this site only. It never records the characters you type, form values, or clipboard contents. When you submit a form, your IP address and browser headers are sent with that timing data to Volance, which stores your IP address only as a one-way hash. Raw scores are deleted after 30 days. No cross-site identifiers are used. Volance is operated by Oops Games LLC; see https://volance.com/privacy.', 'volance-detection' ) . '</p>';
+			. '<p>' . esc_html__( 'We use Volance to estimate whether a form submission on this site comes from a human, an agent, or a bot. Where we ask first, collection starts only after you opt in. The script records interaction timing, pointer movement, and coarse browser and device details on this site only. It never records the characters you type, form values, or clipboard contents. When you submit a form, your IP address and browser headers are sent with that timing data to Volance, which stores your IP address only as a one-way hash. Raw scores are deleted after 30 days. No cross-site identifiers are used. Volance is operated by Oops Games LLC; see https://volance.com/privacy.', 'volance-detection' ) . '</p>';
+		if ( ( new Volance_Detection_State() )->fingerprints() ) {
+			$text .= '<p>' . esc_html__( 'Our Volance workspace also has device fingerprinting switched on: the script reads whether a blank canvas test passes, how many fonts are installed, and the name of the graphics renderer, and sends them to Volance with the submission.', 'volance-detection' ) . '</p>';
+		}
 		wp_add_privacy_policy_content( 'Volance Detection', wp_kses_post( wpautop( $text, false ) ) );
 	}
 }

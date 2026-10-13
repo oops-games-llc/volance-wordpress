@@ -1,0 +1,35 @@
+.volance-title { display: flex; align-items: center; gap: 10px; }
+.volance-wrap .volance-card { background: #fff; border: 1px solid #dcdcde; border-radius: 4px; padding: 12px 18px; margin: 16px 0; max-width: 960px; }
+.volance-wrap .volance-card h2 { margin-top: 4px; }
+.volance-block { display: block; margin: 4px 0; }
+.volance-quiet { color: #646970; }
+.volance-actions { margin: 8px 0; }
+.volance-range { margin: 8px 0; }
+.volance-tiles { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.volance-tile { background: #fff; border: 1px solid #dcdcde; border-radius: 4px; padding: 10px 16px; min-width: 150px; }
+.volance-tile-value { display: block; font-size: 26px; font-weight: 600; line-height: 1.2; }
+.volance-tile-label { display: block; font-weight: 600; }
+.volance-tile-note { display: block; color: #646970; font-size: 12px; }
+.volance-columns { display: flex; flex-wrap: wrap; gap: 16px; }
+.volance-columns > * { flex: 1 1 280px; }
+.volance-chart { display: flex; align-items: flex-end; gap: 3px; height: 140px; padding: 6px 0; border-bottom: 1px solid #c3c4c7; }
+.volance-chart-bar { flex: 1 1 0; background: #2271b1; min-height: 1px; }
+.volance-axis { display: flex; justify-content: space-between; color: #646970; font-size: 12px; }
+.volance-axis-label { display: inline-block; }
+.volance-bars { margin: 0; padding: 0; list-style: none; }
+.volance-bars li { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.volance-bar-name { flex: 0 0 120px; }
+.volance-bar { flex: 1 1 auto; height: 10px; background: #f0f0f1; border-radius: 2px; overflow: hidden; }
+.volance-bar > span { display: block; height: 100%; background: #2271b1; }
+.volance-bar-count { flex: 0 0 48px; text-align: right; }
+.volance-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; background: #f0f0f1; font-size: 12px; }
+.volance-meter { height: 12px; background: #f0f0f1; border-radius: 6px; overflow: hidden; max-width: 420px; }
+.volance-meter > span { display: block; height: 100%; background: #2271b1; }
+.volance-filters { margin: 10px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.volance-table td, .volance-table th { vertical-align: top; }
+.volance-signals { margin: 0; padding: 0; list-style: none; }
+.volance-signals .volance-fired { font-weight: 600; }
+.volance-dl dt { font-weight: 600; margin-top: 8px; }
+.volance-dl dd { margin: 0; }
+.volance-compare { width: 100%; }
+.volance-raw { max-height: 240px; overflow: auto; background: #f6f7f7; padding: 8px; }

@@ -47,7 +47,7 @@ if ( config ) {
 		loading = true;
 		try {
 			const module = await import( config.collector );
-			const created = module.createSiteCollector();
+			const created = module.createSiteCollector( config.collect );
 			created.start( { consent: true } );
 			collector = created;
 		} catch ( error ) {
@@ -128,20 +128,36 @@ if ( config ) {
 	};
 
 	// Copy the snapshot into the form's hidden field just before it is sent.
+	const fill = ( form ) => {
+		if ( ! collector || ! form || typeof form.querySelector !== 'function' ) {
+			return;
+		}
+		let field = form.querySelector( 'input[name="' + config.field + '"]' );
+		if ( ! field && config.injectForms && String( form.method ).toLowerCase() === 'post' ) {
+			field = document.createElement( 'input' );
+			field.type = 'hidden';
+			field.name = config.field;
+			form.appendChild( field );
+		}
+		if ( ! field ) {
+			return;
+		}
+		try {
+			field.value = JSON.stringify( collector.snapshot() );
+		} catch ( error ) {
+			field.value = '';
+		}
+	};
+
+	document.addEventListener( 'submit', ( event ) => fill( event.target ), true );
+
+	// AJAX forms can read their fields before a native submit event, so fill on the button press as well.
 	document.addEventListener(
-		'submit',
+		'click',
 		( event ) => {
-			if ( ! collector || ! event.target || typeof event.target.querySelector !== 'function' ) {
-				return;
-			}
-			const field = event.target.querySelector( 'input[name="' + config.field + '"]' );
-			if ( ! field ) {
-				return;
-			}
-			try {
-				field.value = JSON.stringify( collector.snapshot() );
-			} catch ( error ) {
-				field.value = '';
+			const button = event.target && typeof event.target.closest === 'function' ? event.target.closest( 'button, input[type="submit"]' ) : null;
+			if ( button && button.form ) {
+				fill( button.form );
 			}
 		},
 		true
@@ -149,12 +165,15 @@ if ( config ) {
 
 	window.volanceDetection = { setConsent };
 
-	if ( config.consentMode === 'custom' ) {
+	if ( config.consentMode === 'always' ) {
+		// The site owner has chosen to run detection without asking each visitor.
+		start();
+	} else if ( config.consentMode === 'custom' ) {
 		document.addEventListener( 'volance-detection:consent', ( event ) => {
 			setConsent( !! ( event.detail && event.detail.granted === true ) );
 		} );
 	} else if ( window.navigator.globalPrivacyControl === true ) {
-		// Respect Global Privacy Control: no banner, no collection.
+		// Respect Global Privacy Control in banner mode: no banner, no collection.
 	} else {
 		const stored = readStored();
 		if ( stored === 'granted' ) {

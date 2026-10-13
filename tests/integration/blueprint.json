@@ -1,0 +1,8 @@
+{
+	"$schema": "https://playground.wordpress.net/blueprint-schema.json",
+	"preferredVersions": { "php": "8.2", "wp": "latest" },
+	"steps": [
+		{ "step": "activatePlugin", "pluginPath": "volance-detection/volance-detection.php" },
+		{ "step": "runPHP", "code": "<?php require '/tests/enforcement.php';" }
+	]
+}

@@ -1,17 +1,18 @@
-# Consent, privacy, and readme copy (approved)
+# Consent, privacy, and readme copy
 
 This is the copy the plugin ships. It reflects Volance's published privacy
 position: on-site only, no cross-site identifiers, a one-way IP hash stored by
-Volance, 30-day raw retention, opt-in. Do **not** write "no behavioral tracking"
-and do **not** claim a score proves anything.
+Volance, and 30-day raw retention. Do **not** claim a score proves anything.
 
-> Correction (2026-10-06): earlier drafts said only a hash of the IP is *sent*.
-> The plugin sends the visitor's IP address to Volance (needed for network
-> checks); **Volance stores only a one-way hash**. The plugin also sends the
-> visitor's User-Agent, Accept-Language, Sec-CH-UA and Sec-Fetch headers. All
-> copy below reflects that.
+Consent handling is the site owner's choice (Setup tab):
 
-## Consent (opt-in banner)
+- **Built-in notice** (default): collection is off until the visitor clicks Allow;
+  a browser that sends Global Privacy Control is treated as declined.
+- **My own consent tool**: the site calls `window.volanceDetection.setConsent(true|false)`.
+- **Always on**: the script loads on protected pages without a prompt. The site
+  owner is responsible for covering this in their own privacy notice.
+
+## Consent (built-in banner)
 
 > **Bot detection (optional).** We use an on-site script to estimate whether a
 > form submission comes from a human, an agent, or a bot. It records interaction
@@ -23,41 +24,51 @@ and do **not** claim a score proves anything.
 > **Decline**
 > `[Read our privacy policy]` · `[How Volance handles data]`
 
-Collection is off by default and starts only on affirmative consent
-(`{ consent: true }`). A browser that sends Global Privacy Control is treated as
-declined.
-
 ## Suggested privacy-policy text
 
 Added with `wp_add_privacy_policy_content()` so it appears in the WordPress
 privacy guide:
 
 > We use Volance to estimate whether a form submission on this site comes from a
-> human, an agent, or a bot. Collection happens only after you opt in. The script
-> records interaction timing, pointer movement, and coarse browser and device
-> details on this site only. It never records the characters you type, form
-> values, or clipboard contents. When you submit a form, your IP address and
-> browser headers are sent with that timing data to Volance, which stores your IP
-> address only as a one-way hash. Raw scores are deleted after 30 days. No
-> cross-site identifiers are used. Volance is operated by Oops Games LLC; see
-> https://volance.com/privacy.
+> human, an agent, or a bot. Where we ask first, collection starts only after you
+> opt in. The script records interaction timing, pointer movement, and coarse
+> browser and device details on this site only. It never records the characters
+> you type, form values, or clipboard contents. When you submit a form, your IP
+> address and browser headers are sent with that timing data to Volance, which
+> stores your IP address only as a one-way hash. Raw scores are deleted after 30
+> days. No cross-site identifiers are used. Volance is operated by Oops Games LLC;
+> see https://volance.com/privacy.
 
 ## Facts (keep consistent with Volance)
 
-- **Sent to Volance (after consent, on submit):** interaction timing, pointer
+- **Sent to Volance (on a protected submission):** (fingerprint tier fields only when the workspace has it on, see below) interaction timing, pointer
   movement, wheel and scroll timing, key press timing (not which keys), coarse
-  device/browser descriptors, the visitor's IP address, and the User-Agent,
-  Accept-Language, Sec-CH-UA and Sec-Fetch-Site/Mode headers.
+  device/browser descriptors, the visitor's IP address, and the request headers
+  User-Agent, Accept-Language, Sec-CH-UA, Sec-Fetch-Site/Mode, header name order,
+  proxy-related headers, a yes/no flag for whether a cookie was present, and any
+  Web Bot Auth signature headers. For protected paths, the page path (no query
+  string) is also sent.
 - **Stored by Volance:** the IP only as a salted one-way hash; raw scores and
   sessions for 30 days.
 - **Never collected or sent:** keystroke characters, form values, clipboard
-  content, page text, page URLs (the plugin omits the `page` field), cookies.
-- **Fingerprinting:** off. The plugin never enables the fingerprint tier; if the
-  workspace has it on, the plugin loads and sends nothing.
+  content, page text, cookie values.
+- **Fingerprint tier (canvas, fonts, WebGL):** off by default. It follows the
+  Volance workspace setting, as the Volance install snippet does
+  (createSiteCollector(session.collect)). Only when the workspace has the tier on
+  does the page script read a blank-canvas test, the installed font count and the
+  graphics renderer name, and the scorer sends them. The plugin strips them unless
+  the session response says collect.fingerprints is true (the same rule the
+  Volance API applies). Turning the tier on or off changes the consent storage key,
+  so the built-in banner asks every visitor again. While the tier is on, the Setup tab shows a notice, the
+  consent banner adds a sentence about it, and the privacy-policy text should be
+  extended by the site owner. The cached flag refreshes on every score, on Test
+  connection and twice a day.
 - **Retention:** raw scores/sessions purged after 30 days; longer-lived data is
   aggregate; sessions are deletable in the Volance portal. The plugin's own
   activity log is also purged after 30 days and holds no IP, browser details or
   form content.
+- **Enforcement:** forms start in Observe mode. Flag and Block act on Volance's
+  recommended action, and only while enforcement is on in the Volance workspace; any API error fails open.
 - **Hosting and processors:** Volance runs on Google Firebase (`us-central1`)
   behind Cloudflare. It also uses Resend (email) and Stripe (billing) for account
   services. See https://volance.com/privacy for the authoritative list.

@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Volance Detection
  * Plugin URI:        https://github.com/oops-games-llc/volance-wordpress
- * Description:       Observe-only: relays consented form-submission signals to Volance and logs the human-likeness score in wp-admin. Never blocks; fails open.
- * Version:           0.1.0
+ * Description:       Scores logins, registrations, comments and forms with Volance to tell humans, agents and bots apart, and logs, flags or blocks suspicious ones.
+ * Version:           2.0.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Oops Games LLC
@@ -17,7 +17,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'VOLANCE_DETECTION_VERSION', '0.1.0' );
+define( 'VOLANCE_DETECTION_VERSION', '2.0.0' );
 define( 'VOLANCE_DETECTION_FILE', __FILE__ );
 define( 'VOLANCE_DETECTION_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VOLANCE_DETECTION_URL', plugin_dir_url( __FILE__ ) );
@@ -31,15 +31,24 @@ define( 'VOLANCE_DETECTION_URL', plugin_dir_url( __FILE__ ) );
 define( 'VOLANCE_DETECTION_API_BASE', 'https://app.volance.com' );
 define( 'VOLANCE_DETECTION_COLLECTOR', 'https://app.volance.com/trace.js' );
 
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-decision.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-settings.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-evidence.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-client.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-state.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-response.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-stats.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-export.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-log.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-scorer.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-forms.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-paths.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-frontend.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-admin.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/admin/class-volance-detection-admin-overview.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/admin/class-volance-detection-admin-activity.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/admin/class-volance-detection-admin-plan.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/admin/class-volance-detection-admin-help.php';
 
 /**
  * Activation: seed options, create the log table and schedule the daily job.
@@ -91,6 +100,7 @@ add_action( 'volance_detection_daily', 'volance_detection_run_daily' );
 function volance_detection_boot() {
 	Volance_Detection_Log::maybe_upgrade();
 	Volance_Detection_Forms::init();
+	Volance_Detection_Paths::init();
 	Volance_Detection_Frontend::init();
 	if ( is_admin() ) {
 		Volance_Detection_Admin::init();

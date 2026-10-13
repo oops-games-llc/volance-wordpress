@@ -1,9 +1,14 @@
 <?php
 /**
- * Form hooks. For each enabled form the plugin prints one hidden field and, on
- * submission, queues one score that runs after the response has been sent.
+ * Form hooks. For each protected form the plugin prints one hidden field and,
+ * on submission, scores the request with Volance.
  *
- * The plugin never blocks, redirects or changes a submission.
+ * Each form has a mode:
+ *  - observe: scored after the response has been sent and logged; never changes the submission.
+ *  - flag:    scored before the request completes; a suspicious submission is held or marked.
+ *  - block:   scored before the request completes; a submission Volance says to block is refused.
+ *
+ * Any failure (timeout, quota, error) allows the request.
  *
  * @package Volance_Detection
  */
@@ -11,7 +16,7 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Observes login, registration and comment submissions.
+ * Protects login, registration, password reset, comment, WooCommerce and Contact Form 7 submissions.
  */
 class Volance_Detection_Forms {
 
@@ -19,14 +24,14 @@ class Volance_Detection_Forms {
 	const FIELD = 'volance_snapshot';
 
 	/**
-	 * Forms already queued in this request.
+	 * Forms already handled in this request, with their result.
 	 *
 	 * @var array
 	 */
-	private static $queued = array();
+	private static $results = array();
 
 	/**
-	 * Register hooks for the enabled forms.
+	 * Register hooks for the protected forms.
 	 *
 	 * @return void
 	 */
@@ -34,18 +39,66 @@ class Volance_Detection_Forms {
 		if ( ! Volance_Detection_Settings::is_ready() ) {
 			return;
 		}
-		if ( Volance_Detection_Settings::form_enabled( 'login' ) ) {
-			add_action( 'login_form', array( __CLASS__, 'print_field' ) );
-			add_filter( 'authenticate', array( __CLASS__, 'observe_login' ), 1 );
+		foreach ( Volance_Detection_Settings::form_keys() as $form ) {
+			if ( Volance_Detection_Settings::form_enabled( $form ) && Volance_Detection_Settings::form_available( $form ) ) {
+				self::hook( $form );
+			}
 		}
-		if ( Volance_Detection_Settings::form_enabled( 'register' ) ) {
-			add_action( 'register_form', array( __CLASS__, 'print_field' ) );
-			add_action( 'register_post', array( __CLASS__, 'observe_register' ), 10, 0 );
-		}
-		if ( Volance_Detection_Settings::form_enabled( 'comments' ) ) {
-			add_action( 'comment_form_after_fields', array( __CLASS__, 'print_field' ) );
-			add_action( 'comment_form_logged_in_after', array( __CLASS__, 'print_field' ) );
-			add_action( 'pre_comment_on_post', array( __CLASS__, 'observe_comment' ), 10, 0 );
+	}
+
+	/**
+	 * Hook one form.
+	 *
+	 * @param string $form Form key.
+	 * @return void
+	 */
+	private static function hook( $form ) {
+		switch ( $form ) {
+			case 'login':
+				add_action( 'login_form', array( __CLASS__, 'print_field' ) );
+				add_filter( 'authenticate', array( __CLASS__, 'check_login' ), 1 );
+				add_filter( 'authenticate', array( __CLASS__, 'apply_login' ), 101 );
+				break;
+			case 'register':
+				add_action( 'register_form', array( __CLASS__, 'print_field' ) );
+				add_action( 'register_post', array( __CLASS__, 'check_register' ), 10, 0 );
+				add_filter( 'registration_errors', array( __CLASS__, 'apply_register' ), 99 );
+				break;
+			case 'lostpassword':
+				add_action( 'lostpassword_form', array( __CLASS__, 'print_field' ) );
+				add_action( 'lostpassword_post', array( __CLASS__, 'handle_lostpassword' ), 10, 1 );
+				break;
+			case 'comments':
+				add_action( 'comment_form_after_fields', array( __CLASS__, 'print_field' ) );
+				add_action( 'comment_form_logged_in_after', array( __CLASS__, 'print_field' ) );
+				add_action( 'pre_comment_on_post', array( __CLASS__, 'check_comment' ), 10, 0 );
+				add_filter( 'pre_comment_approved', array( __CLASS__, 'apply_comment' ), 99 );
+				break;
+			case 'wc_login':
+				add_action( 'woocommerce_login_form', array( __CLASS__, 'print_field' ) );
+				add_filter( 'woocommerce_process_login_errors', array( __CLASS__, 'handle_wc_errors' ), 10, 1 );
+				break;
+			case 'wc_register':
+				add_action( 'woocommerce_register_form', array( __CLASS__, 'print_field' ) );
+				add_filter( 'woocommerce_process_registration_errors', array( __CLASS__, 'handle_wc_register' ), 10, 1 );
+				break;
+			case 'wc_checkout':
+				add_action( 'woocommerce_checkout_after_customer_details', array( __CLASS__, 'print_field' ) );
+				add_action( 'woocommerce_after_checkout_validation', array( __CLASS__, 'handle_wc_checkout' ), 10, 2 );
+				break;
+			case 'cf7':
+				add_filter( 'wpcf7_form_hidden_fields', array( __CLASS__, 'cf7_field' ) );
+				add_filter( 'wpcf7_spam', array( __CLASS__, 'handle_cf7' ), 10, 1 );
+				break;
+			case 'wpforms':
+				add_action( 'wpforms_display_submit_before', array( __CLASS__, 'print_field' ) );
+				add_filter( 'wpforms_process_initial_errors', array( __CLASS__, 'handle_wpforms' ), 10, 1 );
+				break;
+			case 'gravity':
+				add_filter( 'gform_form_tag', array( __CLASS__, 'gravity_field' ), 10, 1 );
+				add_filter( 'gform_validation', array( __CLASS__, 'handle_gravity' ), 10, 1 );
+				add_filter( 'gform_validation_message', array( __CLASS__, 'gravity_message' ), 10, 1 );
+				break;
 		}
 	}
 
@@ -60,90 +113,396 @@ class Volance_Detection_Forms {
 	}
 
 	/**
-	 * Authenticate filter: observe, never alter.
+	 * Contact Form 7 hidden field.
+	 *
+	 * @param array $fields Hidden fields.
+	 * @return array
+	 */
+	public static function cf7_field( $fields ) {
+		$fields = is_array( $fields ) ? $fields : array();
+		$fields[ self::FIELD ] = '';
+		return $fields;
+	}
+
+	/**
+	 * Authenticate (early): score the attempt. Never alters the user here.
 	 *
 	 * @param mixed $user User or error passed through unchanged.
 	 * @return mixed
 	 */
-	public static function observe_login( $user ) {
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- WordPress core's login form has no nonce; this only reads a POST marker and changes nothing.
+	public static function check_login( $user ) {
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- WordPress core's login form has no nonce; this only reads a POST marker.
 		if ( isset( $_POST['log'], $_POST['pwd'] ) ) {
-			self::queue( 'login' );
+			self::check( 'login' );
 		}
 		return $user;
 	}
 
 	/**
-	 * Registration submitted.
+	 * Authenticate (late): refuse the attempt when it was blocked.
 	 *
-	 * @return void
+	 * @param mixed $user User or error.
+	 * @return mixed
 	 */
-	public static function observe_register() {
-		self::queue( 'register' );
+	public static function apply_login( $user ) {
+		return self::is_blocked( 'login' ) ? self::error( 'login' ) : $user;
 	}
 
 	/**
-	 * Comment submitted.
+	 * Registration submitted: score it.
 	 *
 	 * @return void
 	 */
-	public static function observe_comment() {
-		self::queue( 'comments' );
+	public static function check_register() {
+		self::check( 'register' );
 	}
 
 	/**
-	 * Capture what is needed now and schedule the score for shutdown.
+	 * Registration errors: refuse when blocked.
+	 *
+	 * @param WP_Error $errors Errors so far.
+	 * @return WP_Error
+	 */
+	public static function apply_register( $errors ) {
+		if ( self::is_blocked( 'register' ) && is_wp_error( $errors ) ) {
+			$errors->add( 'volance_blocked', self::message( 'register' ) );
+		}
+		return $errors;
+	}
+
+	/**
+	 * Password reset requested.
+	 *
+	 * @param WP_Error $errors Errors so far.
+	 * @return void
+	 */
+	public static function handle_lostpassword( $errors ) {
+		self::check( 'lostpassword' );
+		if ( self::is_blocked( 'lostpassword' ) && is_wp_error( $errors ) ) {
+			$errors->add( 'volance_blocked', self::message( 'lostpassword' ) );
+		}
+	}
+
+	/**
+	 * Comment submitted: score it.
+	 *
+	 * @return void
+	 */
+	public static function check_comment() {
+		self::check( 'comments' );
+	}
+
+	/**
+	 * Comment approval: hold a flagged comment, refuse a blocked one.
+	 *
+	 * @param mixed $approved 1, 0, 'spam' or WP_Error.
+	 * @return mixed
+	 */
+	public static function apply_comment( $approved ) {
+		if ( is_wp_error( $approved ) || 'spam' === $approved ) {
+			return $approved;
+		}
+		if ( self::is_blocked( 'comments' ) ) {
+			return new WP_Error( 'volance_blocked', self::message( 'comments' ), 403 );
+		}
+		$result = self::$results['comments'] ?? null;
+		if ( $result && 'flag' === $result['applied'] ) {
+			return 0; // Held for moderation.
+		}
+		return $approved;
+	}
+
+	/**
+	 * WooCommerce login.
+	 *
+	 * @param WP_Error $errors Validation errors.
+	 * @return WP_Error
+	 */
+	public static function handle_wc_errors( $errors ) {
+		self::check( 'wc_login' );
+		if ( self::is_blocked( 'wc_login' ) && is_wp_error( $errors ) ) {
+			$errors->add( 'volance_blocked', self::message( 'wc_login' ) );
+		}
+		return $errors;
+	}
+
+	/**
+	 * WooCommerce registration.
+	 *
+	 * @param WP_Error $errors Validation errors.
+	 * @return WP_Error
+	 */
+	public static function handle_wc_register( $errors ) {
+		self::check( 'wc_register' );
+		if ( self::is_blocked( 'wc_register' ) && is_wp_error( $errors ) ) {
+			$errors->add( 'volance_blocked', self::message( 'wc_register' ) );
+		}
+		return $errors;
+	}
+
+	/**
+	 * WooCommerce checkout.
+	 *
+	 * @param array    $data   Posted data (unused).
+	 * @param WP_Error $errors Validation errors.
+	 * @return void
+	 */
+	public static function handle_wc_checkout( $data, $errors ) {
+		unset( $data );
+		self::check( 'wc_checkout' );
+		if ( self::is_blocked( 'wc_checkout' ) && is_wp_error( $errors ) ) {
+			$errors->add( 'volance_blocked', self::message( 'wc_checkout' ) );
+		}
+	}
+
+	/**
+	 * Contact Form 7: a blocked submission is reported as spam.
+	 *
+	 * @param bool $spam Spam verdict so far.
+	 * @return bool
+	 */
+	public static function handle_cf7( $spam ) {
+		if ( $spam ) {
+			return $spam;
+		}
+		self::check( 'cf7' );
+		return self::is_blocked( 'cf7' ) ? true : $spam;
+	}
+
+	/**
+	 * WPForms: a blocked submission gets a form-level error.
+	 *
+	 * @param array $errors Errors keyed by form id.
+	 * @return array
+	 */
+	public static function handle_wpforms( $errors ) {
+		self::check( 'wpforms' );
+		if ( self::is_blocked( 'wpforms' ) ) {
+			$errors = is_array( $errors ) ? $errors : array();
+			// WPForms keys errors by form id; the form id is not needed to show a header message.
+			$form_id = isset( $_POST['wpforms']['id'] ) ? absint( $_POST['wpforms']['id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- WPForms verifies its own submission.
+			$errors[ $form_id ]['header'] = self::message( 'wpforms' );
+		}
+		return $errors;
+	}
+
+	/**
+	 * Gravity Forms: add the hidden field to every form.
+	 *
+	 * @param string $form_tag Opening form tag.
+	 * @return string
+	 */
+	public static function gravity_field( $form_tag ) {
+		return $form_tag . '<input type="hidden" name="' . esc_attr( self::FIELD ) . '" value="" data-volance-snapshot="1" />';
+	}
+
+	/**
+	 * Gravity Forms: fail validation for a blocked submission.
+	 *
+	 * @param array $result Validation result.
+	 * @return array
+	 */
+	public static function handle_gravity( $result ) {
+		self::check( 'gravity' );
+		if ( self::is_blocked( 'gravity' ) && is_array( $result ) ) {
+			$result['is_valid'] = false;
+		}
+		return $result;
+	}
+
+	/**
+	 * Gravity Forms: the message shown above a form that failed validation because of a block.
+	 *
+	 * @param string $message Existing message markup.
+	 * @return string
+	 */
+	public static function gravity_message( $message ) {
+		if ( self::is_blocked( 'gravity' ) ) {
+			return '<div class="validation_error">' . esc_html( self::message( 'gravity' ) ) . '</div>';
+		}
+		return $message;
+	}
+
+	/**
+	 * Score a request for a protected path (used by Volance_Detection_Paths).
+	 *
+	 * @param string $mode observe|flag|block.
+	 * @param string $page URL path being protected (no query).
+	 * @param string $note The matching rule, shown in the log.
+	 * @return array Result (status, recommended, applied, score, label).
+	 */
+	public static function guard( $mode, $page, $note ) {
+		return self::check( 'path', $mode, $page, $note );
+	}
+
+	/**
+	 * The message shown to a blocked visitor (public for the paths handler).
 	 *
 	 * @param string $form Form key.
-	 * @return void
+	 * @return string
 	 */
-	private static function queue( $form ) {
-		if ( isset( self::$queued[ $form ] ) ) {
-			return;
+	public static function block_message( $form ) {
+		return self::message( $form );
+	}
+
+	/**
+	 * Score a submission once per request and remember the result.
+	 *
+	 * @param string      $form Form key.
+	 * @param string|null $mode Mode override (defaults to the form's saved mode).
+	 * @param string      $page URL path to send as `page` (optional).
+	 * @param string      $note Note stored on the log row (optional).
+	 * @return array Result (status, recommended, applied, score, label).
+	 */
+	private static function check( $form, $mode = null, $page = '', $note = '' ) {
+		if ( isset( self::$results[ $form ] ) ) {
+			return self::$results[ $form ];
 		}
-		self::$queued[ $form ] = true;
+		$mode   = null === $mode ? Volance_Detection_Settings::form_mode( $form ) : $mode;
+		$result = array(
+			'status'      => 'skipped',
+			'recommended' => 'allow',
+			'applied'     => 'allow',
+			'score'       => null,
+			'label'       => '',
+		);
+		if ( 'off' === $mode ) {
+			return $result;
+		}
+		self::$results[ $form ] = $result;
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- read-only; the JSON string is parsed and field-by-field validated by Volance_Detection_Evidence before any use.
 		$raw  = isset( $_POST[ self::FIELD ] ) ? wp_unslash( $_POST[ self::FIELD ] ) : '';
 		$json = is_string( $raw ) ? $raw : '';
 
-		if ( '' === $json && ! self::allow_no_evidence_row() ) {
-			return;
+		$disclosure = Volance_Detection_Evidence::disclosure_headers();
+		$score_empty = 'score' === Volance_Detection_Settings::on_no_evidence();
+
+		// A direct POST that carries no snapshot only gets a log row, and only a capped number per hour.
+		if ( '' === $json && ! $score_empty && ! $disclosure && ! self::allow_no_evidence_row() ) {
+			return $result;
 		}
 
-		$signals = Volance_Detection_Evidence::request_signals();
-		add_action(
-			'shutdown',
-			static function () use ( $form, $json, $signals ) {
-				self::flush( $form, $json, $signals );
-			},
-			1000
+		$options = array(
+			'mode'                   => $mode,
+			'score_without_evidence' => $score_empty,
+			'disclosure'             => $disclosure,
+			'page'                   => $page,
+			'note'                   => $note,
 		);
+		$signals = Volance_Detection_Evidence::request_signals();
+
+		if ( Volance_Detection_Decision::is_synchronous( $mode ) ) {
+			self::$results[ $form ] = self::score_now( $form, $json, $signals, $options );
+		} else {
+			add_action(
+				'shutdown',
+				static function () use ( $form, $json, $signals, $options ) {
+					self::flush( $form, $json, $signals, $options );
+				},
+				1000
+			);
+		}
+
+		return self::$results[ $form ];
 	}
 
 	/**
-	 * Run the score. Fails open on anything.
+	 * Score before the request completes. Fails open on anything.
 	 *
 	 * @param string $form    Form key.
 	 * @param string $json    Raw snapshot.
 	 * @param array  $signals Visitor request description.
+	 * @param array  $options Scorer options.
+	 * @return array Result.
+	 */
+	private static function score_now( $form, $json, array $signals, array $options ) {
+		try {
+			$result = self::scorer()->evaluate( $form, $json, $signals, $options );
+		} catch ( \Throwable $error ) {
+			unset( $error );
+			return array(
+				'status'      => 'error',
+				'recommended' => 'allow',
+				'applied'     => 'allow',
+				'score'       => null,
+				'label'       => '',
+			);
+		}
+		/**
+		 * Fires after a protected request is scored.
+		 *
+		 * @param string $form   Form key.
+		 * @param array  $result status, recommended, applied, score, label.
+		 */
+		do_action( 'volance_detection_decision', $form, $result );
+		if ( 'flag' === $result['applied'] ) {
+			do_action( 'volance_detection_flagged', $form, $result );
+		}
+		if ( 'block' === $result['applied'] ) {
+			do_action( 'volance_detection_blocked', $form, $result );
+		}
+		return $result;
+	}
+
+	/**
+	 * Score after the visitor's response has been sent (observe mode).
+	 *
+	 * @param string $form    Form key.
+	 * @param string $json    Raw snapshot.
+	 * @param array  $signals Visitor request description.
+	 * @param array  $options Scorer options.
 	 * @return void
 	 */
-	private static function flush( $form, $json, array $signals ) {
+	private static function flush( $form, $json, array $signals, array $options ) {
 		// Let the visitor's response finish first where the server supports it.
 		if ( function_exists( 'fastcgi_finish_request' ) ) {
 			fastcgi_finish_request();
 		} elseif ( function_exists( 'litespeed_finish_request' ) ) {
 			litespeed_finish_request();
 		}
+		self::score_now( $form, $json, $signals, $options );
+	}
 
-		try {
-			$client = new Volance_Detection_Client( Volance_Detection_Settings::public_key(), Volance_Detection_Settings::secret_key() );
-			$scorer = new Volance_Detection_Scorer( $client, array( 'Volance_Detection_Log', 'add' ), new Volance_Detection_State() );
-			$scorer->run( $form, $json, $signals );
-		} catch ( \Throwable $error ) {
-			unset( $error ); // Observe-only: a failure here must never reach the visitor.
-		}
+	/**
+	 * Build a scorer wired to the plugin's client, log and state.
+	 *
+	 * @return Volance_Detection_Scorer
+	 */
+	private static function scorer() {
+		$client = new Volance_Detection_Client( Volance_Detection_Settings::public_key(), Volance_Detection_Settings::secret_key() );
+		return new Volance_Detection_Scorer( $client, array( 'Volance_Detection_Log', 'add' ), new Volance_Detection_State() );
+	}
+
+	/**
+	 * Whether the plugin should refuse this form's request.
+	 *
+	 * @param string $form Form key.
+	 * @return bool
+	 */
+	private static function is_blocked( $form ) {
+		return isset( self::$results[ $form ] ) && 'block' === self::$results[ $form ]['applied'];
+	}
+
+	/**
+	 * The message shown to a blocked visitor.
+	 *
+	 * @param string $form Form key.
+	 * @return string
+	 */
+	private static function message( $form ) {
+		$default = __( 'We could not verify this request. Please try again, or contact the site owner if this keeps happening.', 'volance-detection' );
+		return (string) apply_filters( 'volance_detection_block_message', $default, $form, self::$results[ $form ] ?? array() );
+	}
+
+	/**
+	 * A WP_Error for a blocked request.
+	 *
+	 * @param string $form Form key.
+	 * @return WP_Error
+	 */
+	private static function error( $form ) {
+		return new WP_Error( 'volance_blocked', self::message( $form ) );
 	}
 
 	/**

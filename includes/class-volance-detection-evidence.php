@@ -96,7 +96,9 @@ class Volance_Detection_Evidence {
 	);
 
 	/**
-	 * Fingerprint-tier fields. The plugin never forwards these.
+	 * Fingerprint-tier fields (canvas, fonts, WebGL). Volance accepts these only when the
+	 * workspace has the fingerprint tier on, so the scorer strips them unless the session
+	 * response says `collect.fingerprints` is true (the same rule as the Volance API).
 	 */
 	const FINGERPRINT_FIELDS = array( 'canvasBlank', 'fontCount', 'webglRenderer', 'webglSoftwareRenderer' );
 
@@ -210,6 +212,21 @@ class Volance_Detection_Evidence {
 				$out[ $field ] = $raw[ $field ];
 			}
 		}
+		// Fingerprint tier. Shape-checked like the rest; the scorer keeps these only when the workspace opted in.
+		foreach ( array( 'canvasBlank', 'webglSoftwareRenderer' ) as $field ) {
+			if ( isset( $raw[ $field ] ) && is_bool( $raw[ $field ] ) ) {
+				$out[ $field ] = $raw[ $field ];
+			}
+		}
+		if ( isset( $raw['fontCount'] ) ) {
+			$num = self::number( $raw['fontCount'], 0, self::MAX_COUNT );
+			if ( null !== $num ) {
+				$out['fontCount'] = $num;
+			}
+		}
+		if ( isset( $raw['webglRenderer'] ) && is_string( $raw['webglRenderer'] ) && strlen( $raw['webglRenderer'] ) <= 256 && 1 === preg_match( '/^[A-Za-z0-9 ._\-+\/:(),;#]*$/', $raw['webglRenderer'] ) ) {
+			$out['webglRenderer'] = $raw['webglRenderer'];
+		}
 		if ( isset( $raw['prog'] ) && is_array( $raw['prog'] ) ) {
 			$prog = array();
 			foreach ( self::PROG_COUNTS as $field ) {
@@ -258,6 +275,16 @@ class Volance_Detection_Evidence {
 			}
 		}
 		return $out;
+	}
+
+	/**
+	 * Remove the fingerprint-tier fields from clientSignals.
+	 *
+	 * @param array $signals Sanitised clientSignals.
+	 * @return array
+	 */
+	public static function strip_fingerprints( array $signals ) {
+		return array_diff_key( $signals, array_flip( self::FINGERPRINT_FIELDS ) );
 	}
 
 	/**
@@ -339,6 +366,64 @@ class Volance_Detection_Evidence {
 			}
 		}
 
+		// Header names in arrival order (PHP lists HTTP_* variables in that order).
+		$names = array();
+		foreach ( array_keys( $server ) as $key ) {
+			if ( 0 === strpos( (string) $key, 'HTTP_' ) ) {
+				$names[] = strtolower( str_replace( '_', '-', substr( (string) $key, 5 ) ) );
+			}
+			if ( count( $names ) >= 64 ) {
+				break;
+			}
+		}
+		if ( $names ) {
+			$out['headerOrder'] = $names;
+		}
+
+		$proxy = array();
+		foreach ( array( 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'forwarded', 'via', 'x-real-ip' ) as $name ) {
+			if ( in_array( $name, $names, true ) ) {
+				$proxy[] = $name;
+			}
+		}
+		if ( $proxy ) {
+			$out['proxyHeaders'] = $proxy;
+		}
+
+		// A boolean only: whether the request carried any cookie. Never a cookie value.
+		$out['cookiePresent'] = ! empty( $server['HTTP_COOKIE'] );
+
+		return $out;
+	}
+
+	/**
+	 * Signed-agent request headers (RFC 9421 / Web Bot Auth), passed on as
+	 * `disclosureHeaders` so Volance can verify an authorized agent.
+	 *
+	 * @param array|null $server Server variables (defaults to $_SERVER).
+	 * @return array Possibly empty.
+	 */
+	public static function disclosure_headers( $server = null ) {
+		if ( null === $server ) {
+			$server = $_SERVER; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- read-only, each value is filtered below.
+		}
+		$out = array();
+		foreach ( array(
+			'signature-input' => 'HTTP_SIGNATURE_INPUT',
+			'signature'       => 'HTTP_SIGNATURE',
+			'signature-agent' => 'HTTP_SIGNATURE_AGENT',
+		) as $field => $var ) {
+			$value = self::printable( $server[ $var ] ?? '', 2048 );
+			if ( '' !== $value ) {
+				$out[ $field ] = $value;
+			}
+		}
+		if ( $out ) {
+			$authority = self::printable( $server['HTTP_HOST'] ?? '', 255 );
+			if ( '' !== $authority ) {
+				$out['authority'] = $authority;
+			}
+		}
 		return $out;
 	}
 
