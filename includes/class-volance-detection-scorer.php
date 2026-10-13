@@ -104,8 +104,9 @@ class Volance_Detection_Scorer {
 			return $this->failure( $form, $scored );
 		}
 
-		$data = $scored['data'];
-		$meta = isset( $data['evidence'] ) && is_array( $data['evidence'] ) ? $data['evidence'] : array();
+		$data    = $scored['data'];
+		$meta    = isset( $data['evidence'] ) && is_array( $data['evidence'] ) ? $data['evidence'] : array();
+		$compact = Volance_Detection_Response::compact( $data );
 		$this->state->set_last_error( '' );
 		return $this->log(
 			$form,
@@ -117,6 +118,8 @@ class Volance_Detection_Scorer {
 				'events'      => isset( $meta['events'] ) ? (int) $meta['events'] : count( $evidence['events'] ),
 				'behavioural' => isset( $meta['behavioural'] ) ? (bool) $meta['behavioural'] : true,
 				'request_id'  => isset( $data['requestId'] ) && is_string( $data['requestId'] ) ? $data['requestId'] : '',
+				'agent_type'  => Volance_Detection_Response::agent_type( $compact ),
+				'response'    => $compact,
 			)
 		);
 	}

@@ -35,11 +35,18 @@ require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-settings.
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-evidence.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-client.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-state.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-response.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-stats.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-export.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-log.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-scorer.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-forms.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-frontend.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-admin.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/admin/class-volance-detection-admin-overview.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/admin/class-volance-detection-admin-activity.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/admin/class-volance-detection-admin-plan.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/admin/class-volance-detection-admin-help.php';
 
 /**
  * Activation: seed options, create the log table and schedule the daily job.

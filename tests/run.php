@@ -52,6 +52,9 @@ function wp_remote_retrieve_header( $response, $name ) { return $response['heade
 require __DIR__ . '/../includes/class-volance-detection-settings.php';
 require __DIR__ . '/../includes/class-volance-detection-evidence.php';
 require __DIR__ . '/../includes/class-volance-detection-client.php';
+require __DIR__ . '/../includes/class-volance-detection-response.php';
+require __DIR__ . '/../includes/class-volance-detection-stats.php';
+require __DIR__ . '/../includes/class-volance-detection-export.php';
 require __DIR__ . '/../includes/class-volance-detection-scorer.php';
 
 $passed = 0;
