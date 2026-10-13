@@ -96,7 +96,7 @@ class Volance_Detection_Evidence {
 	);
 
 	/**
-	 * Fingerprint-tier fields. The plugin never forwards these.
+	 * Fingerprint-tier fields (canvas, fonts, WebGL). Not in the forwarded whitelist, so they are dropped.
 	 */
 	const FINGERPRINT_FIELDS = array( 'canvasBlank', 'fontCount', 'webglRenderer', 'webglSoftwareRenderer' );
 

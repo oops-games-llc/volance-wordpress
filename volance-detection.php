@@ -3,7 +3,7 @@
  * Plugin Name:       Volance Detection
  * Plugin URI:        https://github.com/oops-games-llc/volance-wordpress
  * Description:       Scores logins, registrations, comments and forms with Volance to tell humans, agents and bots apart, and logs, flags or blocks suspicious ones.
- * Version:           0.1.0
+ * Version:           2.0.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Oops Games LLC
@@ -17,7 +17,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'VOLANCE_DETECTION_VERSION', '0.1.0' );
+define( 'VOLANCE_DETECTION_VERSION', '2.0.0' );
 define( 'VOLANCE_DETECTION_FILE', __FILE__ );
 define( 'VOLANCE_DETECTION_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VOLANCE_DETECTION_URL', plugin_dir_url( __FILE__ ) );

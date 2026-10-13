@@ -147,7 +147,7 @@ class Volance_Detection_Admin_Activity {
 		) . ' &middot; <a href="' . esc_url( $export ) . '">' . esc_html__( 'Download CSV', 'volance-detection' ) . '</a></p>';
 
 		if ( ! $rows ) {
-			echo '<p>' . esc_html__( 'Nothing matches. Submissions appear here after a visitor allows detection and submits an observed form.', 'volance-detection' ) . '</p>';
+			echo '<p>' . esc_html__( 'Nothing matches. Submissions appear here after a visitor submits a protected form.', 'volance-detection' ) . '</p>';
 			return;
 		}
 

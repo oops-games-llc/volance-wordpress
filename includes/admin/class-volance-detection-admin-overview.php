@@ -20,7 +20,7 @@ class Volance_Detection_Admin_Overview {
 	 */
 	public static function render() {
 		if ( ! Volance_Detection_Settings::is_ready() ) {
-			echo '<div class="volance-card"><h2>' . esc_html__( 'Finish setup to see results', 'volance-detection' ) . '</h2><p>' . esc_html__( 'Add your Volance public and secret keys, turn detection on and choose the forms to observe. Results appear here after visitors allow detection and submit those forms.', 'volance-detection' ) . '</p><p><a class="button button-primary" href="' . esc_url( Volance_Detection_Admin::url( 'setup' ) ) . '">' . esc_html__( 'Go to Setup', 'volance-detection' ) . '</a></p></div>';
+			echo '<div class="volance-card"><h2>' . esc_html__( 'Finish setup to see results', 'volance-detection' ) . '</h2><p>' . esc_html__( 'Add your Volance public and secret keys, turn detection on and choose the forms to protect. Results appear here after visitors submit those forms.', 'volance-detection' ) . '</p><p><a class="button button-primary" href="' . esc_url( Volance_Detection_Admin::url( 'setup' ) ) . '">' . esc_html__( 'Go to Setup', 'volance-detection' ) . '</a></p></div>';
 			return;
 		}
 
@@ -39,12 +39,12 @@ class Volance_Detection_Admin_Overview {
 		self::range_switch( $range );
 
 		if ( 0 === $stats['submissions'] ) {
-			echo '<div class="volance-card"><h2>' . esc_html__( 'Nothing recorded in this period', 'volance-detection' ) . '</h2><p>' . esc_html__( 'Submissions appear here after a visitor allows detection and submits an observed form.', 'volance-detection' ) . '</p></div>';
+			echo '<div class="volance-card"><h2>' . esc_html__( 'Nothing recorded in this period', 'volance-detection' ) . '</h2><p>' . esc_html__( 'Submissions appear here after a visitor submits a protected form.', 'volance-detection' ) . '</p></div>';
 			return;
 		}
 
 		echo '<div class="volance-tiles">';
-		self::tile( __( 'Submissions', 'volance-detection' ), number_format_i18n( $stats['submissions'] ), __( 'observed forms', 'volance-detection' ) );
+		self::tile( __( 'Submissions', 'volance-detection' ), number_format_i18n( $stats['submissions'] ), __( 'protected forms', 'volance-detection' ) );
 		self::tile( __( 'Scored', 'volance-detection' ), number_format_i18n( $stats['scored'] ), __( 'sent to Volance', 'volance-detection' ) );
 		self::tile( __( 'Likely human', 'volance-detection' ), $stats['human_pct'] . '%', sprintf( /* translators: %s: number of submissions. */ _n( '%s submission', '%s submissions', $stats['human'], 'volance-detection' ), number_format_i18n( $stats['human'] ) ) );
 		self::tile( __( 'Likely automated', 'volance-detection' ), $stats['automated_pct'] . '%', sprintf( /* translators: %s: number of submissions. */ _n( '%s submission', '%s submissions', $stats['automated'], 'volance-detection' ), number_format_i18n( $stats['automated'] ) ) );
@@ -63,7 +63,7 @@ class Volance_Detection_Admin_Overview {
 		self::bars( __( 'By result', 'volance-detection' ), $stats['statuses'], false, true );
 		echo '</div>';
 
-		echo '<p class="description">' . esc_html__( 'Percentages count scored submissions that Volance classified. A submission without consented browser evidence is never sent to Volance, so it has no score. Figures cover what this site kept: entries are deleted after 30 days.', 'volance-detection' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'Percentages count scored submissions that Volance classified. Unless you chose to score submissions without browser evidence, a submission with no evidence is not sent to Volance and has no score. Figures cover what this site kept: entries are deleted after 30 days.', 'volance-detection' ) . '</p>';
 	}
 
 	/**

@@ -9,7 +9,7 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Prints the consent loader on the pages that have an observed form.
+ * Prints the consent loader on the pages that have a protected form.
  */
 class Volance_Detection_Frontend {
 
@@ -125,7 +125,7 @@ class Volance_Detection_Frontend {
 			return;
 		}
 		$text = '<p class="privacy-policy-tutorial">' . esc_html__( 'Suggested wording if you use Volance Detection. Review it against your own practices.', 'volance-detection' ) . '</p>'
-			. '<p>' . esc_html__( 'We use Volance to estimate whether a form submission on this site comes from a human, an agent, or a bot. Collection happens only after you opt in. The script records interaction timing, pointer movement, and coarse browser and device details on this site only. It never records the characters you type, form values, or clipboard contents. When you submit a form, your IP address and browser headers are sent with that timing data to Volance, which stores your IP address only as a one-way hash. Raw scores are deleted after 30 days. No cross-site identifiers are used. Volance is operated by Oops Games LLC; see https://volance.com/privacy.', 'volance-detection' ) . '</p>';
+			. '<p>' . esc_html__( 'We use Volance to estimate whether a form submission on this site comes from a human, an agent, or a bot. Where we ask first, collection starts only after you opt in. The script records interaction timing, pointer movement, and coarse browser and device details on this site only. It never records the characters you type, form values, or clipboard contents. When you submit a form, your IP address and browser headers are sent with that timing data to Volance, which stores your IP address only as a one-way hash. Raw scores are deleted after 30 days. No cross-site identifiers are used. Volance is operated by Oops Games LLC; see https://volance.com/privacy.', 'volance-detection' ) . '</p>';
 		wp_add_privacy_policy_content( 'Volance Detection', wp_kses_post( wpautop( $text, false ) ) );
 	}
 }
