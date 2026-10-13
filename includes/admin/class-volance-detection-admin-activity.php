@@ -152,7 +152,7 @@ class Volance_Detection_Admin_Activity {
 		}
 
 		echo '<table class="widefat striped volance-table"><thead><tr>';
-		foreach ( array( __( 'Time', 'volance-detection' ), __( 'Form', 'volance-detection' ), __( 'Result', 'volance-detection' ), __( 'Class', 'volance-detection' ), __( 'Browser evidence', 'volance-detection' ), __( 'Request ID', 'volance-detection' ), '' ) as $heading ) {
+		foreach ( array( __( 'Time', 'volance-detection' ), __( 'Form', 'volance-detection' ), __( 'Result', 'volance-detection' ), __( 'Action', 'volance-detection' ), __( 'Class', 'volance-detection' ), __( 'Browser evidence', 'volance-detection' ), __( 'Request ID', 'volance-detection' ), '' ) as $heading ) {
 			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
 		}
 		echo '</tr></thead><tbody>';
@@ -165,6 +165,7 @@ class Volance_Detection_Admin_Activity {
 			echo '<td>' . esc_html( Volance_Detection_Admin::format_time( (string) $row->created_at ) ) . '</td>';
 			echo '<td>' . esc_html( Volance_Detection_Admin::form_label( (string) $row->form ) ) . '</td>';
 			echo '<td>' . esc_html( self::result_text( $row, $statuses ) ) . '</td>';
+			echo '<td>' . esc_html( self::action_text( $row ) ) . '</td>';
 			echo '<td>' . esc_html( $class ) . '</td>';
 			echo '<td>' . esc_html( self::evidence_text( $row ) ) . '</td>';
 			echo '<td>' . ( '' !== (string) $row->request_id ? '<code>' . esc_html( (string) $row->request_id ) . '</code>' : '' ) . '</td>';
@@ -207,6 +208,31 @@ class Volance_Detection_Admin_Activity {
 			echo '<option value="' . esc_attr( $value ) . '"' . selected( $current, $value, false ) . '>' . esc_html( $forms ? Volance_Detection_Admin::form_label( $value ) : $value ) . '</option>';
 		}
 		echo '</select></label>';
+	}
+
+	/**
+	 * Action column text: what the plugin did, and what Volance recommended if that differs.
+	 *
+	 * @param object $row Log row.
+	 * @return string
+	 */
+	private static function action_text( $row ) {
+		$recommended = (string) ( $row->action ?? '' );
+		$applied     = (string) ( $row->applied ?? '' );
+		if ( '' === $recommended ) {
+			return '';
+		}
+		$labels = array(
+			'allow' => __( 'Allowed', 'volance-detection' ),
+			'flag'  => __( 'Flagged', 'volance-detection' ),
+			'block' => __( 'Blocked', 'volance-detection' ),
+		);
+		$done   = $labels[ $applied ] ?? $applied;
+		if ( $recommended === $applied || 'flag' === $applied ) {
+			return $done;
+		}
+		/* translators: 1: what the plugin did (Allowed), 2: what Volance recommended (block). */
+		return sprintf( __( '%1$s (Volance: %2$s)', 'volance-detection' ), $done, $recommended );
 	}
 
 	/**

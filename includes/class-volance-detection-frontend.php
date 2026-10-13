@@ -31,51 +31,49 @@ class Volance_Detection_Frontend {
 	}
 
 	/**
-	 * Whether the Volance workspace allows loading (fingerprint tier is off).
-	 *
-	 * @return bool
-	 */
-	private static function allowed() {
-		$state = new Volance_Detection_State();
-		return ! $state->fingerprints();
-	}
-
-	/**
 	 * Banner styles (only needed when the built-in banner is used).
 	 *
 	 * @return void
 	 */
 	public static function enqueue_style() {
 		$settings = Volance_Detection_Settings::get();
-		if ( 'banner' !== $settings['consent_mode'] || ! self::allowed() ) {
+		if ( 'banner' !== $settings['consent_mode'] ) {
 			return;
 		}
 		wp_enqueue_style( 'volance-detection', VOLANCE_DETECTION_URL . 'assets/css/banner.css', array(), VOLANCE_DETECTION_VERSION );
 	}
 
 	/**
-	 * Front-end pages: only singular pages whose comment form is observed.
+	 * Front-end pages that carry a protected form.
 	 *
 	 * @return void
 	 */
 	public static function print_front() {
-		if ( ! Volance_Detection_Settings::form_enabled( 'comments' ) || ! is_singular() || ! comments_open() ) {
-			return;
+		$comments = Volance_Detection_Settings::form_enabled( 'comments' ) && is_singular() && comments_open();
+		$shop     = ( Volance_Detection_Settings::form_enabled( 'wc_login' ) || Volance_Detection_Settings::form_enabled( 'wc_register' ) )
+			&& function_exists( 'is_account_page' ) && is_account_page();
+		$checkout = Volance_Detection_Settings::form_enabled( 'wc_checkout' ) && function_exists( 'is_checkout' ) && is_checkout();
+		// Contact Form 7 forms can sit on any page, so load on singular pages when it is protected.
+		$contact = Volance_Detection_Settings::form_enabled( 'cf7' ) && Volance_Detection_Settings::form_available( 'cf7' ) && is_singular();
+		/**
+		 * Filter whether the collector loads on the current front-end page.
+		 *
+		 * @param bool $load Default decision.
+		 */
+		if ( apply_filters( 'volance_detection_load_collector', $comments || $shop || $checkout || $contact ) ) {
+			self::print_assets();
 		}
-		self::print_assets();
 	}
 
 	/**
-	 * Login screen: the login and registration forms only, never other actions.
+	 * Login screen: the login, registration and password-reset forms only, never other actions.
 	 *
 	 * @return void
 	 */
 	public static function print_login() {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- selects which core screen is showing; changes nothing.
 		$action = isset( $_REQUEST['action'] ) ? sanitize_key( wp_unslash( $_REQUEST['action'] ) ) : 'login';
-		if ( 'login' === $action && Volance_Detection_Settings::form_enabled( 'login' ) ) {
-			self::print_assets();
-		} elseif ( 'register' === $action && Volance_Detection_Settings::form_enabled( 'register' ) ) {
+		if ( in_array( $action, array( 'login', 'register', 'lostpassword' ), true ) && Volance_Detection_Settings::form_enabled( $action ) ) {
 			self::print_assets();
 		}
 	}
@@ -86,9 +84,6 @@ class Volance_Detection_Frontend {
 	 * @return void
 	 */
 	private static function print_assets() {
-		if ( ! self::allowed() ) {
-			return;
-		}
 		$settings = Volance_Detection_Settings::get();
 		$config   = array(
 			'collector'      => VOLANCE_DETECTION_COLLECTOR,

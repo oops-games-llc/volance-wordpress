@@ -18,7 +18,7 @@ defined( 'ABSPATH' ) || exit;
 class Volance_Detection_Log {
 
 	const DB_VERSION_OPTION = 'volance_detection_db_version';
-	const DB_VERSION        = '2';
+	const DB_VERSION        = '3';
 
 	/**
 	 * Table name.
@@ -51,6 +51,8 @@ class Volance_Detection_Log {
 			agent_type varchar(40) NOT NULL DEFAULT '',
 			events int(11) NOT NULL DEFAULT 0,
 			behavioural tinyint(1) NOT NULL DEFAULT 0,
+			action varchar(10) NOT NULL DEFAULT '',
+			applied varchar(10) NOT NULL DEFAULT '',
 			request_id varchar(64) NOT NULL DEFAULT '',
 			note varchar(190) NOT NULL DEFAULT '',
 			response longtext,
@@ -96,8 +98,10 @@ class Volance_Detection_Log {
 			'behavioural' => empty( $row['behavioural'] ) ? 0 : 1,
 			'request_id'  => substr( (string) ( $row['request_id'] ?? '' ), 0, 64 ),
 			'note'        => substr( (string) ( $row['note'] ?? '' ), 0, 190 ),
+			'action'      => substr( (string) ( $row['action'] ?? '' ), 0, 10 ),
+			'applied'     => substr( (string) ( $row['applied'] ?? '' ), 0, 10 ),
 		);
-		$format = array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s' );
+		$format = array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s' );
 		if ( isset( $row['score'] ) && null !== $row['score'] ) {
 			$data['score'] = round( (float) $row['score'], 1 );
 			$format[]      = '%f';

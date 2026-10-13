@@ -21,3 +21,5 @@ wordpress/
 # Editors
 .idea/
 .vscode/
+
+tests/integration/result.txt

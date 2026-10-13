@@ -21,7 +21,7 @@ class Volance_Detection_Export {
 	 * @return string[]
 	 */
 	public static function headings() {
-		return array( 'time_utc', 'form', 'result', 'score', 'verdict', 'class', 'agent_type', 'events', 'browser_evidence', 'request_id', 'note' );
+		return array( 'time_utc', 'form', 'result', 'score', 'verdict', 'class', 'agent_type', 'events', 'browser_evidence', 'request_id', 'recommended_action', 'applied_action', 'note' );
 	}
 
 	/**
@@ -61,6 +61,8 @@ class Volance_Detection_Export {
 				(string) (int) $row->events,
 				( (int) $row->behavioural ) ? 'yes' : 'no',
 				(string) $row->request_id,
+				(string) ( $row->action ?? '' ),
+				(string) ( $row->applied ?? '' ),
 				(string) $row->note,
 			)
 		);

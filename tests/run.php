@@ -49,6 +49,7 @@ function wp_remote_retrieve_response_code( $response ) { return $response['code'
 function wp_remote_retrieve_body( $response ) { return $response['body']; }
 function wp_remote_retrieve_header( $response, $name ) { return $response['headers'][ $name ] ?? ''; }
 
+require __DIR__ . '/../includes/class-volance-detection-decision.php';
 require __DIR__ . '/../includes/class-volance-detection-settings.php';
 require __DIR__ . '/../includes/class-volance-detection-evidence.php';
 require __DIR__ . '/../includes/class-volance-detection-client.php';
@@ -95,13 +96,13 @@ $out = Volance_Detection_Settings::sanitize(
 		'public_key' => $pk,
 		'secret_key' => $sk,
 		'enabled'    => '1',
-		'forms'      => array( 'login' => '1', 'bogus' => '1' ),
+		'forms'      => array( 'login' => 'observe', 'comments' => '1', 'bogus' => 'block' ),
 	)
 );
 check( 'valid keys saved', $pk === $out['public_key'] );
 check( 'secret stored separately, not in settings array', ! isset( $out['secret_key'] ) && $sk === get_option( 'volance_detection_secret' ) );
 check( 'enabled when keys valid', true === $out['enabled'] );
-check( 'unknown form dropped', array( 'login' => true ) === $out['forms'] );
+check( 'unknown form and invalid mode dropped', array( 'login' => 'observe' ) === $out['forms'] );
 
 update_option( 'volance_detection_settings', $out );
 $out2 = Volance_Detection_Settings::sanitize( array( 'public_key' => $pk, 'secret_key' => '', 'enabled' => '1' ) );
@@ -203,10 +204,10 @@ check( 'accept-language passed', 'en-US,en;q=0.9' === $signals['acceptLanguage']
 check( 'Sec-CH-UA split per brand', array( '"Chromium";v="124"', '"Not-A.Brand";v="99"' ) === $signals['secChUa'] );
 check( 'Sec-Fetch token lowercased', 'same-origin' === $signals['secFetchSite'] );
 check( 'invalid Sec-Fetch token omitted', ! isset( $signals['secFetchMode'] ) );
-check( 'no cookie or page fields sent', ! isset( $signals['cookiePresent'] ) && ! isset( $signals['page'] ) );
+check( 'cookie presence is a boolean only, never a value', isset( $signals['cookiePresent'] ) && is_bool( $signals['cookiePresent'] ) && ! isset( $signals['page'] ) );
 $bad_ip = Volance_Detection_Evidence::request_signals( array( 'REMOTE_ADDR' => 'not-an-ip' ) );
 check( 'invalid IP omitted', ! isset( $bad_ip['visitorIp'] ) );
-check( 'missing headers omitted', array() === $bad_ip );
+check( 'missing headers omitted', array( 'cookiePresent' => false ) === $bad_ip );
 
 // --- Client -----------------------------------------------------------------
 reset_world();
@@ -304,18 +305,11 @@ check( 'payload has no fingerprint fields', ! isset( $client->last_payload['clie
 check( 'log row carries result', 91.26 === $rows[0]['score'] && 'human' === $rows[0]['verdict'] && 'comments' === $rows[0]['form'] && 'req_1' === $rows[0]['request_id'] && true === $rows[0]['behavioural'] );
 check( 'log row stores no IP, UA or form content', ! array_key_exists( 'visitorIp', $rows[0] ) && false === strpos( json_encode( $rows[0] ), '203.0.113.9' ) );
 
-$rows  = array();
-$state = new Fake_State();
-$state->fingerprints = true;
-list( $scorer, $client ) = make_scorer( $rows, ok_client(), $state );
-check( 'fingerprint flag on: skipped without any call', 'skipped' === $scorer->run( 'login', $good, array() ) && array() === $client->calls );
-
 $rows   = array();
 $client = ok_client();
 $client->session_reply['data']['collect']['fingerprints'] = true;
-$state  = new Fake_State();
-list( $scorer ) = make_scorer( $rows, $client, $state );
-check( 'session reports fingerprints: skipped, flag recorded, never scored', 'skipped' === $scorer->run( 'login', $good, array() ) && true === $state->fingerprints && array( 'session' ) === $client->calls );
+list( $scorer ) = make_scorer( $rows, $client, new Fake_State() );
+check( 'session reports fingerprints: still scored, no fingerprint fields sent', 'scored' === $scorer->run( 'login', $good, array() ) && ! isset( $client->last_payload['clientSignals']->canvasBlank ) );
 
 $rows   = array();
 $client = ok_client();
@@ -341,6 +335,121 @@ $client = ok_client();
 $client->session_reply['data'] = array( 'collect' => array() );
 list( $scorer ) = make_scorer( $rows, $client );
 check( 'malformed session: error, never scored', 'error' === $scorer->run( 'login', $good, array() ) && array( 'session' ) === $client->calls );
+
+// --- Decisions and enforcement ---------------------------------------------
+check( 'decision: observe never acts', 'allow' === Volance_Detection_Decision::resolve( 'observe', 'block' ) );
+check( 'decision: flag mode allows allow', 'allow' === Volance_Detection_Decision::resolve( 'flag', 'allow' ) );
+check( 'decision: flag mode flags flag', 'flag' === Volance_Detection_Decision::resolve( 'flag', 'flag' ) );
+check( 'decision: flag mode softens block to flag', 'flag' === Volance_Detection_Decision::resolve( 'flag', 'block' ) );
+check( 'decision: block mode passes block through', 'block' === Volance_Detection_Decision::resolve( 'block', 'block' ) );
+check( 'decision: block mode keeps flag as flag', 'flag' === Volance_Detection_Decision::resolve( 'block', 'flag' ) );
+check( 'decision: junk action is allow', 'allow' === Volance_Detection_Decision::resolve( 'block', 'DROP TABLE' ) && 'allow' === Volance_Detection_Decision::resolve( 'block', null ) );
+check( 'decision: flag and block are synchronous, observe is not', Volance_Detection_Decision::is_synchronous( 'flag' ) && Volance_Detection_Decision::is_synchronous( 'block' ) && ! Volance_Detection_Decision::is_synchronous( 'observe' ) );
+
+function client_with_action( $action ) {
+	$client = ok_client();
+	$client->score_reply['data']['action'] = $action;
+	return $client;
+}
+
+$rows = array();
+list( $scorer ) = make_scorer( $rows, client_with_action( 'block' ) );
+$res = $scorer->evaluate( 'login', $good, array(), array( 'mode' => 'block' ) );
+check( 'evaluate block mode: applied block, recommended block', 'block' === $res['applied'] && 'block' === $res['recommended'] && 'scored' === $res['status'] );
+check( 'evaluate logs recommended and applied action', 'block' === $rows[0]['action'] && 'block' === $rows[0]['applied'] );
+
+$rows = array();
+list( $scorer ) = make_scorer( $rows, client_with_action( 'block' ) );
+$res = $scorer->evaluate( 'login', $good, array(), array( 'mode' => 'observe' ) );
+check( 'evaluate observe mode: recommends block but applies allow', 'block' === $res['recommended'] && 'allow' === $res['applied'] );
+
+$rows = array();
+list( $scorer ) = make_scorer( $rows, client_with_action( 'flag' ) );
+$res = $scorer->evaluate( 'comments', $good, array(), array( 'mode' => 'flag' ) );
+check( 'evaluate flag mode: applied flag', 'flag' === $res['applied'] );
+
+$rows = array();
+$client = client_with_action( 'block' );
+$client->session_reply = array( 'ok' => false, 'status' => 0, 'error' => 'down', 'retry_after' => 0, 'data' => array() );
+list( $scorer ) = make_scorer( $rows, $client );
+$res = $scorer->evaluate( 'login', $good, array(), array( 'mode' => 'block' ) );
+check( 'API failure in block mode fails open', 'allow' === $res['applied'] && 'error' === $res['status'] );
+
+$rows = array();
+list( $scorer, $client ) = make_scorer( $rows, client_with_action( 'block' ) );
+$res = $scorer->evaluate( 'login', '', array( 'visitorIp' => '203.0.113.9' ), array( 'mode' => 'block' ) );
+check( 'no evidence, default policy: allowed, logged, nothing sent', 'allow' === $res['applied'] && 'no_evidence' === $res['status'] && array() === $client->calls );
+
+$rows = array();
+list( $scorer, $client ) = make_scorer( $rows, client_with_action( 'block' ) );
+$res = $scorer->evaluate( 'login', '', array( 'visitorIp' => '203.0.113.9' ), array( 'mode' => 'block', 'score_without_evidence' => true ) );
+check( 'no evidence, score policy: scored on request signals alone', 'block' === $res['applied'] && array( 'session', 'score' ) === $client->calls && array() === $client->last_payload['events'] );
+
+$rows = array();
+list( $scorer, $client ) = make_scorer( $rows, client_with_action( 'allow' ) );
+$disc = array( 'signature-input' => 'sig1=("@authority")', 'signature' => 'sig1=:abc:', 'signature-agent' => 'https://agent.example', 'authority' => 'example.com' );
+$res = $scorer->evaluate( 'login', '', array(), array( 'mode' => 'block', 'disclosure' => $disc ) );
+check( 'signed agent headers: scored without a snapshot and forwarded', 'scored' === $res['status'] && (object) $disc == $client->last_payload['disclosureHeaders'] );
+
+$rows = array();
+$state = new Fake_State();
+$state->fingerprints = true;
+list( $scorer, $client ) = make_scorer( $rows, ok_client(), $state );
+check( 'workspace fingerprint flag no longer stops scoring', 'scored' === $scorer->run( 'login', $good, array() ) );
+
+$rows = array();
+list( $scorer, $client ) = make_scorer( $rows, ok_client() );
+$scorer->evaluate( 'login', $good, array(), array( 'page' => '/checkout' ) );
+check( 'page option is forwarded', '/checkout' === $client->last_payload['page'] );
+
+// --- Form modes and request signals ---------------------------------------
+reset_world();
+update_option( 'volance_detection_settings', array( 'forms' => array( 'login' => true, 'register' => 'block', 'comments' => 'flag', 'cf7' => 'observe', 'wc_login' => 'junk' ) ) );
+check( 'legacy true reads as observe', 'observe' === Volance_Detection_Settings::form_mode( 'login' ) );
+check( 'stored modes are read', 'block' === Volance_Detection_Settings::form_mode( 'register' ) && 'flag' === Volance_Detection_Settings::form_mode( 'comments' ) );
+check( 'junk or missing mode is off', 'off' === Volance_Detection_Settings::form_mode( 'wc_login' ) && 'off' === Volance_Detection_Settings::form_mode( 'lostpassword' ) );
+check( 'form_enabled follows the mode', Volance_Detection_Settings::form_enabled( 'register' ) && ! Volance_Detection_Settings::form_enabled( 'lostpassword' ) );
+check( 'default no-evidence policy is allow', 'allow' === Volance_Detection_Settings::on_no_evidence() );
+
+reset_world();
+$pk  = 'pk_abcdefgh12345678';
+$sk  = 'sk_zyxwvuts98765432';
+$out = Volance_Detection_Settings::sanitize( array( 'public_key' => $pk, 'secret_key' => $sk, 'enabled' => '1', 'consent_mode' => 'always', 'on_no_evidence' => 'score', 'forms' => array( 'login' => 'block', 'comments' => 'nonsense', 'cf7' => 'flag' ) ) );
+check( 'sanitize keeps valid modes and drops invalid ones', array( 'login' => 'block', 'cf7' => 'flag' ) === $out['forms'] );
+check( 'sanitize accepts always-on consent and score policy', 'always' === $out['consent_mode'] && 'score' === $out['on_no_evidence'] );
+$out = Volance_Detection_Settings::sanitize( array( 'consent_mode' => 'nope', 'on_no_evidence' => 'nope' ) );
+check( 'sanitize falls back for unknown consent and policy values', 'banner' === $out['consent_mode'] && 'allow' === $out['on_no_evidence'] );
+
+$server = array(
+	'REMOTE_ADDR'            => '203.0.113.9',
+	'HTTP_HOST'              => 'example.com',
+	'HTTP_USER_AGENT'        => 'Mozilla/5.0',
+	'HTTP_ACCEPT_LANGUAGE'   => 'en-US',
+	'HTTP_X_FORWARDED_FOR'   => '198.51.100.1',
+	'HTTP_COOKIE'            => 'secret=session-token',
+	'HTTP_SIGNATURE_INPUT'   => 'sig1=("@authority");keyid="k"',
+	'HTTP_SIGNATURE'         => 'sig1=:abc:',
+	'HTTP_SIGNATURE_AGENT'   => 'https://agent.example',
+);
+$signals = Volance_Detection_Evidence::request_signals( $server );
+check( 'request signals: header order in arrival order', array( 'host', 'user-agent', 'accept-language', 'x-forwarded-for', 'cookie', 'signature-input', 'signature', 'signature-agent' ) === $signals['headerOrder'] );
+check( 'request signals: proxy headers named', array( 'x-forwarded-for' ) === $signals['proxyHeaders'] );
+check( 'request signals: cookie presence is a boolean, value never sent', true === $signals['cookiePresent'] && false === strpos( json_encode( $signals ), 'session-token' ) );
+$none = Volance_Detection_Evidence::request_signals( array( 'REMOTE_ADDR' => '203.0.113.9' ) );
+check( 'request signals: no cookie gives false', false === $none['cookiePresent'] );
+$disc = Volance_Detection_Evidence::disclosure_headers( $server );
+check( 'disclosure headers collected with authority', 'sig1=:abc:' === $disc['signature'] && 'https://agent.example' === $disc['signature-agent'] && 'example.com' === $disc['authority'] );
+check( 'no signature headers: no disclosure', array() === Volance_Detection_Evidence::disclosure_headers( array( 'HTTP_HOST' => 'example.com' ) ) );
+
+// --- Client -----------------------------------------------------------------
+reset_world();
+$GLOBALS['vd_http_reply'] = array( 'code' => 200, 'body' => json_encode( array( 'enabled' => true ) ), 'headers' => array() );
+$GLOBALS['vd_http'] = array();
+$client = new Volance_Detection_Client( 'pk_abcdefgh12345678', 'sk_zyxwvuts98765432', 'https://api.example.test' );
+$client->set_config( array( 'enabled' => true, 'thresholds' => array( 'allow' => 70, 'block' => 40 ) ) );
+check( 'set_config POSTs to /api/trace/config with the secret key', 'POST' === $GLOBALS['vd_http'][0]['args']['method'] && false !== strpos( $GLOBALS['vd_http'][0]['url'], '/api/trace/config' ) && 'Bearer sk_zyxwvuts98765432' === $GLOBALS['vd_http'][0]['args']['headers']['Authorization'] );
+$client->verify_token( 'tok_1' );
+check( 'verify_token POSTs the trust token', false !== strpos( $GLOBALS['vd_http'][1]['url'], '/api/trace/verify-token' ) && false !== strpos( $GLOBALS['vd_http'][1]['args']['body'], 'tok_1' ) );
 
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

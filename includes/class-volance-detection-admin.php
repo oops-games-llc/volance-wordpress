@@ -29,6 +29,7 @@ class Volance_Detection_Admin {
 		add_action( 'admin_init', array( __CLASS__, 'redirect_old_url' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
 		add_action( 'admin_post_volance_detection_test', array( __CLASS__, 'handle_test' ) );
+		add_action( 'admin_post_volance_detection_policy', array( __CLASS__, 'handle_policy' ) );
 		add_filter( 'plugin_action_links_' . plugin_basename( VOLANCE_DETECTION_FILE ), array( __CLASS__, 'action_links' ) );
 		Volance_Detection_Admin_Activity::init();
 		Volance_Detection_Admin_Help::init();
@@ -170,9 +171,14 @@ class Volance_Detection_Admin {
 	 */
 	public static function form_label( $key ) {
 		$labels = array(
-			'login'    => __( 'Login', 'volance-detection' ),
-			'register' => __( 'Registration', 'volance-detection' ),
-			'comments' => __( 'Comments', 'volance-detection' ),
+			'login'        => __( 'Login', 'volance-detection' ),
+			'register'     => __( 'Registration', 'volance-detection' ),
+			'lostpassword' => __( 'Password reset', 'volance-detection' ),
+			'comments'     => __( 'Comments', 'volance-detection' ),
+			'wc_login'     => __( 'WooCommerce login', 'volance-detection' ),
+			'wc_register'  => __( 'WooCommerce registration', 'volance-detection' ),
+			'wc_checkout'  => __( 'WooCommerce checkout', 'volance-detection' ),
+			'cf7'          => __( 'Contact Form 7', 'volance-detection' ),
 		);
 		return $labels[ $key ] ?? $key;
 	}
@@ -279,7 +285,7 @@ class Volance_Detection_Admin {
 		}
 		echo '</nav>';
 
-		echo '<p class="description volance-intro">' . esc_html__( 'Volance Detection currently only observes: it never blocks, redirects or changes a submission. Scores are estimates, not proof that a visitor is human or a bot.', 'volance-detection' ) . '</p>';
+		echo '<p class="description volance-intro">' . esc_html__( 'Volance scores each protected submission and recommends allow, flag or block. Choose per form whether the plugin only logs, flags, or blocks. Scores are estimates, not proof that a visitor is human or a bot.', 'volance-detection' ) . '</p>';
 
 		switch ( $tab ) {
 			case 'overview':
@@ -374,24 +380,46 @@ class Volance_Detection_Admin {
 				<tr>
 					<th scope="row"><?php esc_html_e( 'Turn on', 'volance-detection' ); ?></th>
 					<td>
-						<label><input type="checkbox" name="<?php echo esc_attr( Volance_Detection_Settings::OPTION ); ?>[enabled]" value="1" <?php checked( ! empty( $settings['enabled'] ) ); ?> /> <?php esc_html_e( 'Observe the forms selected below', 'volance-detection' ); ?></label>
+						<label><input type="checkbox" name="<?php echo esc_attr( Volance_Detection_Settings::OPTION ); ?>[enabled]" value="1" <?php checked( ! empty( $settings['enabled'] ) ); ?> /> <?php esc_html_e( 'Protect the forms selected below', 'volance-detection' ); ?></label>
 					</td>
 				</tr>
 				<tr>
-					<th scope="row"><?php esc_html_e( 'Forms to observe', 'volance-detection' ); ?></th>
+					<th scope="row"><?php esc_html_e( 'Forms', 'volance-detection' ); ?></th>
+					<td>
+						<?php
+						$mode_labels = array(
+							'off'     => __( 'Off', 'volance-detection' ),
+							'observe' => __( 'Observe (log only)', 'volance-detection' ),
+							'flag'    => __( 'Flag (hold or mark suspicious ones)', 'volance-detection' ),
+							'block'   => __( 'Block (refuse when Volance says block)', 'volance-detection' ),
+						);
+						foreach ( Volance_Detection_Settings::form_keys() as $key ) :
+							$available = Volance_Detection_Settings::form_available( $key );
+							$current   = Volance_Detection_Settings::form_mode( $key );
+							?>
+							<p class="volance-form-row">
+								<label for="volance-form-<?php echo esc_attr( $key ); ?>"><strong><?php echo esc_html( self::form_label( $key ) ); ?></strong></label><br />
+								<select id="volance-form-<?php echo esc_attr( $key ); ?>" name="<?php echo esc_attr( Volance_Detection_Settings::OPTION ); ?>[forms][<?php echo esc_attr( $key ); ?>]" <?php disabled( ! $available ); ?>>
+									<?php foreach ( $mode_labels as $value => $label ) : ?>
+										<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $current, $value ); ?>><?php echo esc_html( $label ); ?></option>
+									<?php endforeach; ?>
+								</select>
+								<?php if ( ! $available ) : ?>
+									<span class="description"><?php esc_html_e( 'The plugin for this form is not active.', 'volance-detection' ); ?></span>
+								<?php endif; ?>
+							</p>
+						<?php endforeach; ?>
+						<p class="description"><?php esc_html_e( 'Observe scores after the page has been sent and never affects a visitor. Flag and Block score before the request completes, so a submission can wait up to a few seconds if Volance is slow. If Volance cannot be reached the request is always allowed.', 'volance-detection' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'Visitors without browser evidence', 'volance-detection' ); ?></th>
 					<td>
 						<fieldset>
-							<?php
-							$labels = array(
-								'login'    => __( 'Login form', 'volance-detection' ),
-								'register' => __( 'Registration form', 'volance-detection' ),
-								'comments' => __( 'Comment form', 'volance-detection' ),
-							);
-							foreach ( $labels as $key => $label ) :
-								?>
-								<label class="volance-block"><input type="checkbox" name="<?php echo esc_attr( Volance_Detection_Settings::OPTION ); ?>[forms][<?php echo esc_attr( $key ); ?>]" value="1" <?php checked( ! empty( $settings['forms'][ $key ] ) ); ?> /> <?php echo esc_html( $label ); ?></label>
-							<?php endforeach; ?>
+							<label class="volance-block"><input type="radio" name="<?php echo esc_attr( Volance_Detection_Settings::OPTION ); ?>[on_no_evidence]" value="allow" <?php checked( 'allow', $settings['on_no_evidence'] ); ?> /> <?php esc_html_e( 'Let them through and log it (use this with the consent notice)', 'volance-detection' ); ?></label>
+							<label class="volance-block"><input type="radio" name="<?php echo esc_attr( Volance_Detection_Settings::OPTION ); ?>[on_no_evidence]" value="score" <?php checked( 'score', $settings['on_no_evidence'] ); ?> /> <?php esc_html_e( 'Score the request on its headers and IP alone (use this when detection runs without asking)', 'volance-detection' ); ?></label>
 						</fieldset>
+						<p class="description"><?php esc_html_e( 'A visitor who declined, or a bot that never ran the page script, sends no browser evidence.', 'volance-detection' ); ?></p>
 					</td>
 				</tr>
 				<tr>
@@ -400,8 +428,9 @@ class Volance_Detection_Admin {
 						<fieldset>
 							<label class="volance-block"><input type="radio" name="<?php echo esc_attr( Volance_Detection_Settings::OPTION ); ?>[consent_mode]" value="banner" <?php checked( 'banner', $settings['consent_mode'] ); ?> /> <?php esc_html_e( 'Show the built-in Allow / Decline notice', 'volance-detection' ); ?></label>
 							<label class="volance-block"><input type="radio" name="<?php echo esc_attr( Volance_Detection_Settings::OPTION ); ?>[consent_mode]" value="custom" <?php checked( 'custom', $settings['consent_mode'] ); ?> /> <?php esc_html_e( 'Use my own consent tool', 'volance-detection' ); ?></label>
+							<label class="volance-block"><input type="radio" name="<?php echo esc_attr( Volance_Detection_Settings::OPTION ); ?>[consent_mode]" value="always" <?php checked( 'always', $settings['consent_mode'] ); ?> /> <?php esc_html_e( 'Always on (no notice; I handle disclosure myself)', 'volance-detection' ); ?></label>
 						</fieldset>
-						<p class="description"><?php esc_html_e( 'Nothing is collected and no Volance script is loaded until a visitor allows it. With your own tool, call window.volanceDetection.setConsent(true) when a visitor agrees (or false if they decline or withdraw).', 'volance-detection' ); ?></p>
+						<p class="description"><?php esc_html_e( 'With the notice, nothing is collected and no Volance script is loaded until a visitor allows it. With your own tool, call window.volanceDetection.setConsent(true) when a visitor agrees (or false if they decline or withdraw). With Always on, you are responsible for any disclosure or consent your visitors or local law require.', 'volance-detection' ); ?></p>
 					</td>
 				</tr>
 			</table>
@@ -414,6 +443,87 @@ class Volance_Detection_Admin {
 			<?php submit_button( __( 'Test connection', 'volance-detection' ), 'secondary', 'submit', false ); ?>
 			<span class="description"><?php esc_html_e( 'Checks both saved keys. Does not use any of your monthly scores.', 'volance-detection' ); ?></span>
 		</form>
+
+		<?php self::render_policy(); ?>
 		<?php
+	}
+
+	/**
+	 * Workspace policy panel: the thresholds Volance uses to recommend allow, flag or block.
+	 *
+	 * @return void
+	 */
+	private static function render_policy() {
+		if ( ! Volance_Detection_Settings::is_ready() ) {
+			return;
+		}
+		$client = new Volance_Detection_Client( Volance_Detection_Settings::public_key(), Volance_Detection_Settings::secret_key() );
+		$config = $client->config();
+		echo '<div class="volance-card"><h2>' . esc_html__( 'Workspace policy', 'volance-detection' ) . '</h2>';
+		if ( ! $config['ok'] ) {
+			echo '<p>' . esc_html( $config['error'] ) . '</p></div>';
+			return;
+		}
+		$data    = $config['data'];
+		$allow   = isset( $data['thresholds']['allow'] ) ? (int) $data['thresholds']['allow'] : 70;
+		$block   = isset( $data['thresholds']['block'] ) ? (int) $data['thresholds']['block'] : 40;
+		$enabled = ! empty( $data['enabled'] );
+		?>
+		<p class="description"><?php esc_html_e( 'These settings live in your Volance workspace and also apply to anything else that uses your keys. A score at or above the allow threshold is allowed, below the block threshold is blocked, and in between is flagged.', 'volance-detection' ); ?></p>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="volance_detection_policy" />
+			<?php wp_nonce_field( 'volance_detection_policy' ); ?>
+			<p><label><input type="checkbox" name="policy_enabled" value="1" <?php checked( $enabled ); ?> /> <?php esc_html_e( 'Enforcement enabled in the workspace', 'volance-detection' ); ?></label></p>
+			<p>
+				<label for="volance-allow"><?php esc_html_e( 'Allow at or above', 'volance-detection' ); ?></label>
+				<input id="volance-allow" type="number" min="0" max="100" name="policy_allow" value="<?php echo esc_attr( (string) $allow ); ?>" class="small-text" />
+				<label for="volance-block"><?php esc_html_e( 'Block below', 'volance-detection' ); ?></label>
+				<input id="volance-block" type="number" min="0" max="100" name="policy_block" value="<?php echo esc_attr( (string) $block ); ?>" class="small-text" />
+			</p>
+			<?php submit_button( __( 'Save policy to Volance', 'volance-detection' ), 'secondary', 'submit', false ); ?>
+		</form>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Save the workspace policy to Volance, then return to Setup.
+	 *
+	 * @return void
+	 */
+	public static function handle_policy() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to do this.', 'volance-detection' ), '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( 'volance_detection_policy' );
+
+		$allow = isset( $_POST['policy_allow'] ) ? (int) $_POST['policy_allow'] : 70; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- cast to int; nonce checked above.
+		$block = isset( $_POST['policy_block'] ) ? (int) $_POST['policy_block'] : 40; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- cast to int; nonce checked above.
+		$allow = max( 0, min( 100, $allow ) );
+		$block = max( 0, min( 100, $block ) );
+
+		$result = array(
+			'ok'      => false,
+			'message' => '',
+		);
+		if ( $block > $allow ) {
+			$result['message'] = __( 'The block threshold cannot be higher than the allow threshold.', 'volance-detection' );
+		} else {
+			$client = new Volance_Detection_Client( Volance_Detection_Settings::public_key(), Volance_Detection_Settings::secret_key() );
+			$saved  = $client->set_config(
+				array(
+					'enabled'    => ! empty( $_POST['policy_enabled'] ),
+					'thresholds' => array(
+						'allow' => $allow,
+						'block' => $block,
+					),
+				)
+			);
+			$result['ok']      = $saved['ok'];
+			$result['message'] = $saved['ok'] ? __( 'Policy saved to Volance.', 'volance-detection' ) : $saved['error'];
+		}
+		set_transient( 'volance_detection_test_' . get_current_user_id(), $result, 120 );
+		wp_safe_redirect( self::url( 'setup' ) );
+		exit;
 	}
 }

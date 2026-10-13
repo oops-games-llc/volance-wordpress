@@ -21,7 +21,26 @@ class Volance_Detection_Settings {
 	 * @return string[]
 	 */
 	public static function form_keys() {
-		return array( 'login', 'register', 'comments' );
+		return array( 'login', 'register', 'lostpassword', 'comments', 'wc_login', 'wc_register', 'wc_checkout', 'cf7' );
+	}
+
+	/**
+	 * Whether the plugin a form belongs to is active on this site.
+	 *
+	 * @param string $form Form key.
+	 * @return bool
+	 */
+	public static function form_available( $form ) {
+		switch ( $form ) {
+			case 'wc_login':
+			case 'wc_register':
+			case 'wc_checkout':
+				return class_exists( 'WooCommerce' );
+			case 'cf7':
+				return defined( 'WPCF7_VERSION' );
+			default:
+				return true;
+		}
 	}
 
 	/**
@@ -31,10 +50,11 @@ class Volance_Detection_Settings {
 	 */
 	public static function defaults() {
 		return array(
-			'public_key'   => '',
-			'enabled'      => false,
-			'consent_mode' => 'banner',
-			'forms'        => array(),
+			'public_key'     => '',
+			'enabled'        => false,
+			'consent_mode'   => 'banner',
+			'forms'          => array(),
+			'on_no_evidence' => 'allow',
 		);
 	}
 
@@ -129,14 +149,41 @@ class Volance_Detection_Settings {
 	}
 
 	/**
-	 * Whether a form is enabled for observation.
+	 * The mode a form is in: off, observe (log only), flag or block.
+	 *
+	 * @param string $form Form key.
+	 * @return string off|observe|flag|block.
+	 */
+	public static function form_mode( $form ) {
+		$settings = self::get();
+		$value    = $settings['forms'][ $form ] ?? false;
+		if ( true === $value || 1 === $value || '1' === $value ) {
+			return 'observe'; // Stored by 0.1.x.
+		}
+		if ( is_string( $value ) && in_array( $value, Volance_Detection_Decision::modes(), true ) ) {
+			return $value;
+		}
+		return 'off';
+	}
+
+	/**
+	 * Whether a form is protected in any mode.
 	 *
 	 * @param string $form Form key.
 	 * @return bool
 	 */
 	public static function form_enabled( $form ) {
+		return 'off' !== self::form_mode( $form );
+	}
+
+	/**
+	 * What to do when a protected form arrives with no browser evidence.
+	 *
+	 * @return string allow|score  allow = let it through and log it; score = score the request signals alone.
+	 */
+	public static function on_no_evidence() {
 		$settings = self::get();
-		return ! empty( $settings['forms'][ $form ] );
+		return 'score' === ( $settings['on_no_evidence'] ?? 'allow' ) ? 'score' : 'allow';
 	}
 
 	/**
@@ -185,13 +232,16 @@ class Volance_Detection_Settings {
 			delete_option( self::SECRET_OPTION );
 		}
 
-		$out['enabled']      = ! empty( $input['enabled'] );
-		$out['consent_mode'] = ( isset( $input['consent_mode'] ) && 'custom' === $input['consent_mode'] ) ? 'custom' : 'banner';
+		$out['enabled']        = ! empty( $input['enabled'] );
+		$consent               = isset( $input['consent_mode'] ) ? (string) $input['consent_mode'] : 'banner';
+		$out['consent_mode']   = in_array( $consent, array( 'banner', 'custom', 'always' ), true ) ? $consent : 'banner';
+		$out['on_no_evidence'] = ( isset( $input['on_no_evidence'] ) && 'score' === $input['on_no_evidence'] ) ? 'score' : 'allow';
 
 		$forms = array();
 		foreach ( self::form_keys() as $key ) {
-			if ( ! empty( $input['forms'][ $key ] ) ) {
-				$forms[ $key ] = true;
+			$mode = isset( $input['forms'][ $key ] ) ? (string) $input['forms'][ $key ] : 'off';
+			if ( in_array( $mode, Volance_Detection_Decision::modes(), true ) ) {
+				$forms[ $key ] = $mode;
 			}
 		}
 		$out['forms'] = $forms;

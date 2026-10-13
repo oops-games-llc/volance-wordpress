@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Volance Detection
  * Plugin URI:        https://github.com/oops-games-llc/volance-wordpress
- * Description:       Observe-only: relays consented form-submission signals to Volance and logs the human-likeness score in wp-admin. Never blocks; fails open.
+ * Description:       Scores logins, registrations, comments and forms with Volance to tell humans, agents and bots apart, and logs, flags or blocks suspicious ones.
  * Version:           0.1.0
  * Requires at least: 6.0
  * Requires PHP:      8.0
@@ -31,6 +31,7 @@ define( 'VOLANCE_DETECTION_URL', plugin_dir_url( __FILE__ ) );
 define( 'VOLANCE_DETECTION_API_BASE', 'https://app.volance.com' );
 define( 'VOLANCE_DETECTION_COLLECTOR', 'https://app.volance.com/trace.js' );
 
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-decision.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-settings.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-evidence.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-client.php';

@@ -1,7 +1,8 @@
 <?php
 /**
- * Score pipeline for one form submission. Observe-only: it logs and returns,
- * and any problem results in a log row, never a blocked or delayed visitor.
+ * Score pipeline for one protected request. It logs every outcome and returns
+ * what Volance recommended and what the plugin should apply for the form's mode.
+ * Any problem (timeout, quota, error) fails open: the request is allowed.
  *
  * @package Volance_Detection
  */
@@ -28,7 +29,7 @@ class Volance_Detection_Scorer {
 	private $logger;
 
 	/**
-	 * State object (fingerprints(), set_fingerprints(), backoff_until(), set_backoff(), set_last_error()).
+	 * State object (backoff_until(), set_backoff(), set_last_error()).
 	 *
 	 * @var object
 	 */
@@ -48,47 +49,73 @@ class Volance_Detection_Scorer {
 	}
 
 	/**
-	 * Score one submission.
+	 * Score one request and return its status only.
 	 *
-	 * @param string $form             Form key (login, register, comments).
+	 * @param string $form             Form key.
 	 * @param string $snapshot_json    Raw snapshot from the hidden field ('' when absent).
 	 * @param array  $request_signals  Visitor request description.
 	 * @return string Outcome: scored|no_evidence|rejected|skipped|limited|error.
 	 */
 	public function run( $form, $snapshot_json, array $request_signals ) {
-		// Without a consented snapshot nothing is sent to Volance at all.
+		$result = $this->evaluate( $form, $snapshot_json, $request_signals );
+		return $result['status'];
+	}
+
+	/**
+	 * Score one request and decide what to do with it.
+	 *
+	 * @param string $form            Form key.
+	 * @param string $snapshot_json   Raw snapshot from the hidden field ('' when absent).
+	 * @param array  $request_signals Visitor request description.
+	 * @param array  $options         mode (observe|flag|block), score_without_evidence (bool),
+	 *                                disclosure (signed-agent headers).
+	 * @return array {status:string, recommended:string, applied:string, score:?float, label:string}
+	 */
+	public function evaluate( $form, $snapshot_json, array $request_signals, array $options = array() ) {
+		$mode       = isset( $options['mode'] ) ? (string) $options['mode'] : 'observe';
+		$disclosure = ( isset( $options['disclosure'] ) && is_array( $options['disclosure'] ) ) ? $options['disclosure'] : array();
+		// A signed agent never runs the page script, so it is always worth scoring.
+		$allow_empty = ! empty( $options['score_without_evidence'] ) || ! empty( $disclosure );
+
+		$evidence = array(
+			'clientSignals' => array(),
+			'events'        => array(),
+		);
+		$problem  = '';
+
 		if ( '' === $snapshot_json ) {
-			return $this->log( $form, 'no_evidence', array( 'note' => 'No consented browser evidence.' ) );
+			$problem = 'no_evidence';
+		} else {
+			$parsed = Volance_Detection_Evidence::sanitize_snapshot( $snapshot_json );
+			if ( null === $parsed ) {
+				$problem = 'rejected';
+			} elseif ( 0 === count( $parsed['events'] ) ) {
+				$problem = 'no_evidence';
+			} else {
+				$evidence = $parsed;
+			}
 		}
 
-		$evidence = Volance_Detection_Evidence::sanitize_snapshot( $snapshot_json );
-		if ( null === $evidence ) {
-			return $this->log( $form, 'rejected', array( 'note' => 'Snapshot was invalid or contained content fields.' ) );
-		}
-		if ( 0 === count( $evidence['events'] ) ) {
-			return $this->log( $form, 'no_evidence', array( 'note' => 'Consent given but no interaction was recorded.' ) );
+		if ( '' !== $problem && ! $allow_empty ) {
+			$notes = array(
+				'no_evidence' => __( 'No browser evidence.', 'volance-detection' ),
+				'rejected'    => __( 'Snapshot was invalid or contained content fields.', 'volance-detection' ),
+			);
+			return $this->finish( $form, $problem, array( 'note' => $notes[ $problem ] ) );
 		}
 
-		if ( $this->state->fingerprints() ) {
-			return $this->log( $form, 'skipped', array( 'note' => 'Workspace has fingerprinting enabled; plugin does not send.' ) );
-		}
 		if ( $this->state->backoff_until() > 0 ) {
-			return $this->log( $form, 'limited', array( 'note' => 'Paused after a Volance rate limit.' ) );
+			return $this->finish( $form, 'limited', array( 'note' => __( 'Paused after a Volance rate limit.', 'volance-detection' ) ) );
 		}
 
 		$session = $this->client->session();
 		if ( ! $session['ok'] ) {
 			return $this->failure( $form, $session );
 		}
-		$collect = ( isset( $session['data']['collect'] ) && is_array( $session['data']['collect'] ) ) ? $session['data']['collect'] : array();
-		if ( true === ( $collect['fingerprints'] ?? false ) ) {
-			$this->state->set_fingerprints( true );
-			return $this->log( $form, 'skipped', array( 'note' => 'Workspace has fingerprinting enabled; plugin does not send.' ) );
-		}
 		$sid      = isset( $session['data']['sessionId'] ) ? (string) $session['data']['sessionId'] : '';
 		$manifest = isset( $session['data']['manifest'] ) ? (string) $session['data']['manifest'] : '';
 		if ( '' === $sid || '' === $manifest ) {
-			return $this->log( $form, 'error', array( 'note' => 'Volance returned an unexpected session.' ) );
+			return $this->finish( $form, 'error', array( 'note' => __( 'Volance returned an unexpected session.', 'volance-detection' ) ) );
 		}
 
 		$payload = array(
@@ -98,29 +125,46 @@ class Volance_Detection_Scorer {
 			'events'         => $evidence['events'],
 			'requestSignals' => (object) $request_signals,
 		);
+		if ( ! empty( $options['page'] ) && is_string( $options['page'] ) ) {
+			$payload['page'] = substr( $options['page'], 0, 256 );
+		}
+		if ( $disclosure ) {
+			$payload['disclosureHeaders'] = (object) $disclosure;
+		}
 
 		$scored = $this->client->score( $payload );
 		if ( ! $scored['ok'] ) {
 			return $this->failure( $form, $scored );
 		}
 
-		$data    = $scored['data'];
-		$meta    = isset( $data['evidence'] ) && is_array( $data['evidence'] ) ? $data['evidence'] : array();
-		$compact = Volance_Detection_Response::compact( $data );
+		$data        = $scored['data'];
+		$meta        = isset( $data['evidence'] ) && is_array( $data['evidence'] ) ? $data['evidence'] : array();
+		$compact     = Volance_Detection_Response::compact( $data );
+		$recommended = Volance_Detection_Decision::normalize_action( $data['action'] ?? '' );
+		$applied     = Volance_Detection_Decision::resolve( $mode, $recommended );
+		$score       = isset( $data['score'] ) && is_numeric( $data['score'] ) ? (float) $data['score'] : null;
+		$label       = isset( $data['classification']['label'] ) && is_string( $data['classification']['label'] ) ? $data['classification']['label'] : '';
+
 		$this->state->set_last_error( '' );
-		return $this->log(
+		return $this->finish(
 			$form,
 			'scored',
 			array(
-				'score'       => isset( $data['score'] ) && is_numeric( $data['score'] ) ? (float) $data['score'] : null,
+				'score'       => $score,
 				'verdict'     => isset( $data['verdict'] ) && is_string( $data['verdict'] ) ? $data['verdict'] : '',
-				'label'       => isset( $data['classification']['label'] ) && is_string( $data['classification']['label'] ) ? $data['classification']['label'] : '',
+				'label'       => $label,
 				'events'      => isset( $meta['events'] ) ? (int) $meta['events'] : count( $evidence['events'] ),
-				'behavioural' => isset( $meta['behavioural'] ) ? (bool) $meta['behavioural'] : true,
+				'behavioural' => isset( $meta['behavioural'] ) ? (bool) $meta['behavioural'] : ! empty( $evidence['events'] ),
 				'request_id'  => isset( $data['requestId'] ) && is_string( $data['requestId'] ) ? $data['requestId'] : '',
 				'agent_type'  => Volance_Detection_Response::agent_type( $compact ),
 				'response'    => $compact,
-			)
+				'action'      => $recommended,
+				'applied'     => $applied,
+			),
+			$recommended,
+			$applied,
+			$score,
+			$label
 		);
 	}
 
@@ -129,26 +173,30 @@ class Volance_Detection_Scorer {
 	 *
 	 * @param string $form   Form key.
 	 * @param array  $result Client result.
-	 * @return string Outcome.
+	 * @return array Result (always allowed).
 	 */
 	private function failure( $form, array $result ) {
 		$this->state->set_last_error( $result['error'] );
 		if ( 429 === $result['status'] ) {
 			$this->state->set_backoff( $result['retry_after'] );
-			return $this->log( $form, 'limited', array( 'note' => $result['error'] ) );
+			return $this->finish( $form, 'limited', array( 'note' => $result['error'] ) );
 		}
-		return $this->log( $form, 'error', array( 'note' => $result['error'] ) );
+		return $this->finish( $form, 'error', array( 'note' => $result['error'] ) );
 	}
 
 	/**
-	 * Write a log row and return the status.
+	 * Write a log row and return the result.
 	 *
-	 * @param string $form   Form key.
-	 * @param string $status Outcome.
-	 * @param array  $extra  Extra columns.
-	 * @return string The status.
+	 * @param string      $form        Form key.
+	 * @param string      $status      Outcome.
+	 * @param array       $extra       Extra columns.
+	 * @param string      $recommended Volance's action.
+	 * @param string      $applied     Action the plugin applies.
+	 * @param float|null  $score       Score.
+	 * @param string      $label       Classification label.
+	 * @return array {status, recommended, applied, score, label}
 	 */
-	private function log( $form, $status, array $extra = array() ) {
+	private function finish( $form, $status, array $extra = array(), $recommended = 'allow', $applied = 'allow', $score = null, $label = '' ) {
 		call_user_func(
 			$this->logger,
 			array_merge(
@@ -159,6 +207,12 @@ class Volance_Detection_Scorer {
 				$extra
 			)
 		);
-		return $status;
+		return array(
+			'status'      => $status,
+			'recommended' => $recommended,
+			'applied'     => $applied,
+			'score'       => $score,
+			'label'       => $label,
+		);
 	}
 }

@@ -75,6 +75,27 @@ class Volance_Detection_Client {
 	}
 
 	/**
+	 * Update workspace policy (secret key), for example
+	 * `{ "enabled": true, "thresholds": { "allow": 70, "block": 40 } }`.
+	 *
+	 * @param array $config Policy fields to change.
+	 * @return array Result.
+	 */
+	public function set_config( array $config ) {
+		return $this->request( 'POST', '/api/trace/config', $this->secret_key, $config );
+	}
+
+	/**
+	 * Verify a single-use trust token returned by a score (secret key).
+	 *
+	 * @param string $token Trust token.
+	 * @return array Result; data holds valid, score and verdict.
+	 */
+	public function verify_token( $token ) {
+		return $this->request( 'POST', '/api/trace/verify-token', $this->secret_key, array( 'trustToken' => (string) $token ) );
+	}
+
+	/**
 	 * Score one submission (secret key). Metered by Volance.
 	 *
 	 * @param array $payload Score request body.
