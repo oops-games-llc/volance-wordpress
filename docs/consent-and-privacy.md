@@ -41,7 +41,7 @@ privacy guide:
 
 ## Facts (keep consistent with Volance)
 
-- **Sent to Volance (on a protected submission):** interaction timing, pointer
+- **Sent to Volance (on a protected submission):** (fingerprint tier fields only when the workspace has it on, see below) interaction timing, pointer
   movement, wheel and scroll timing, key press timing (not which keys), coarse
   device/browser descriptors, the visitor's IP address, and the request headers
   User-Agent, Accept-Language, Sec-CH-UA, Sec-Fetch-Site/Mode, header name order,
@@ -52,8 +52,16 @@ privacy guide:
   sessions for 30 days.
 - **Never collected or sent:** keystroke characters, form values, clipboard
   content, page text, cookie values.
-- **Fingerprint tier (canvas, fonts, WebGL):** the plugin does not forward these
-  fields.
+- **Fingerprint tier (canvas, fonts, WebGL):** off by default. It follows the
+  Volance workspace setting, as the Volance install snippet does
+  (createSiteCollector(session.collect)). Only when the workspace has the tier on
+  does the page script read a blank-canvas test, the installed font count and the
+  graphics renderer name, and the scorer sends them. The plugin strips them unless
+  the session response says collect.fingerprints is true (the same rule the
+  Volance API applies). While the tier is on, the Setup tab shows a notice, the
+  consent banner adds a sentence about it, and the privacy-policy text should be
+  extended by the site owner. The cached flag refreshes on every score, on Test
+  connection and twice a day.
 - **Retention:** raw scores/sessions purged after 30 days; longer-lived data is
   aggregate; sessions are deletable in the Volance portal. The plugin's own
   activity log is also purged after 30 days and holds no IP, browser details or

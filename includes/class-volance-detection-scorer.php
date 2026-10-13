@@ -112,6 +112,15 @@ class Volance_Detection_Scorer {
 		if ( ! $session['ok'] ) {
 			return $this->failure( $form, $session );
 		}
+		// Same rule as the Volance API: fingerprint-tier fields travel only while the workspace has the tier on.
+		$collect = isset( $session['data']['collect'] ) && is_array( $session['data']['collect'] ) ? $session['data']['collect'] : array();
+		$tier_on = true === ( $collect['fingerprints'] ?? false );
+		if ( $tier_on !== $this->state->fingerprints() ) {
+			$this->state->set_fingerprints( $tier_on ); // Keeps the page script's setting current.
+		}
+		if ( ! $tier_on ) {
+			$evidence['clientSignals'] = Volance_Detection_Evidence::strip_fingerprints( $evidence['clientSignals'] );
+		}
 		$sid      = isset( $session['data']['sessionId'] ) ? (string) $session['data']['sessionId'] : '';
 		$manifest = isset( $session['data']['manifest'] ) ? (string) $session['data']['manifest'] : '';
 		if ( '' === $sid || '' === $manifest ) {

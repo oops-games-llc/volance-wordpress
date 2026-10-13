@@ -96,7 +96,9 @@ class Volance_Detection_Evidence {
 	);
 
 	/**
-	 * Fingerprint-tier fields (canvas, fonts, WebGL). Not in the forwarded whitelist, so they are dropped.
+	 * Fingerprint-tier fields (canvas, fonts, WebGL). Volance accepts these only when the
+	 * workspace has the fingerprint tier on, so the scorer strips them unless the session
+	 * response says `collect.fingerprints` is true (the same rule as the Volance API).
 	 */
 	const FINGERPRINT_FIELDS = array( 'canvasBlank', 'fontCount', 'webglRenderer', 'webglSoftwareRenderer' );
 
@@ -210,6 +212,21 @@ class Volance_Detection_Evidence {
 				$out[ $field ] = $raw[ $field ];
 			}
 		}
+		// Fingerprint tier. Shape-checked like the rest; the scorer keeps these only when the workspace opted in.
+		foreach ( array( 'canvasBlank', 'webglSoftwareRenderer' ) as $field ) {
+			if ( isset( $raw[ $field ] ) && is_bool( $raw[ $field ] ) ) {
+				$out[ $field ] = $raw[ $field ];
+			}
+		}
+		if ( isset( $raw['fontCount'] ) ) {
+			$num = self::number( $raw['fontCount'], 0, self::MAX_COUNT );
+			if ( null !== $num ) {
+				$out['fontCount'] = $num;
+			}
+		}
+		if ( isset( $raw['webglRenderer'] ) && is_string( $raw['webglRenderer'] ) && strlen( $raw['webglRenderer'] ) <= 256 && 1 === preg_match( '/^[A-Za-z0-9 ._\-+\/:(),;#]*$/', $raw['webglRenderer'] ) ) {
+			$out['webglRenderer'] = $raw['webglRenderer'];
+		}
 		if ( isset( $raw['prog'] ) && is_array( $raw['prog'] ) ) {
 			$prog = array();
 			foreach ( self::PROG_COUNTS as $field ) {
@@ -258,6 +275,16 @@ class Volance_Detection_Evidence {
 			}
 		}
 		return $out;
+	}
+
+	/**
+	 * Remove the fingerprint-tier fields from clientSignals.
+	 *
+	 * @param array $signals Sanitised clientSignals.
+	 * @return array
+	 */
+	public static function strip_fingerprints( array $signals ) {
+		return array_diff_key( $signals, array_flip( self::FINGERPRINT_FIELDS ) );
 	}
 
 	/**

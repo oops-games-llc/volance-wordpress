@@ -143,7 +143,11 @@ $clean = Volance_Detection_Evidence::sanitize_snapshot( $good );
 check( 'valid snapshot parsed', is_array( $clean ) );
 check( 'unknown event types skipped', 2 === count( $clean['events'] ) );
 check( 'only allowlisted event fields kept', array( 'type', 't', 'x', 'y' ) === array_keys( $clean['events'][0] ) );
-check( 'fingerprint-tier fields dropped', ! isset( $clean['clientSignals']['canvasBlank'], $clean['clientSignals']['fontCount'], $clean['clientSignals']['webglRenderer'] ) );
+check( 'fingerprint-tier fields shape-checked and kept for the scorer', false === $clean['clientSignals']['canvasBlank'] && 12 === $clean['clientSignals']['fontCount'] && 'ANGLE' === $clean['clientSignals']['webglRenderer'] );
+$stripped = Volance_Detection_Evidence::strip_fingerprints( $clean['clientSignals'] );
+check( 'strip_fingerprints removes only the tier fields', ! isset( $stripped['canvasBlank'], $stripped['fontCount'], $stripped['webglRenderer'], $stripped['webglSoftwareRenderer'] ) && 1280 === $stripped['innerWidth'] );
+$bad_fp = Volance_Detection_Evidence::sanitize_snapshot( json_encode( array( 'clientSignals' => array( 'webglRenderer' => '<script>alert(1)</script>', 'fontCount' => 'many', 'canvasBlank' => 'no' ), 'events' => array( array( 'type' => 'click', 't' => 1 ) ) ) ) );
+check( 'bad fingerprint-tier values are dropped', ! isset( $bad_fp['clientSignals']['webglRenderer'] ) && ! isset( $bad_fp['clientSignals']['fontCount'] ) && ! isset( $bad_fp['clientSignals']['canvasBlank'] ) );
 check( 'unknown clientSignals dropped', ! isset( $clean['clientSignals']['unknownField'] ) );
 check( 'allowlisted clientSignals kept', 1280 === $clean['clientSignals']['innerWidth'] && 'Win32' === $clean['clientSignals']['platform'] && false === $clean['clientSignals']['webdriver'] );
 check( 'keys nested under clientSignals, bad dwell dropped', array( 1, 2 ) === $clean['clientSignals']['keys']['dwells'] && 3 === $clean['clientSignals']['keys']['count'] );
@@ -308,8 +312,19 @@ check( 'log row stores no IP, UA or form content', ! array_key_exists( 'visitorI
 $rows   = array();
 $client = ok_client();
 $client->session_reply['data']['collect']['fingerprints'] = true;
-list( $scorer ) = make_scorer( $rows, $client, new Fake_State() );
-check( 'session reports fingerprints: still scored, no fingerprint fields sent', 'scored' === $scorer->run( 'login', $good, array() ) && ! isset( $client->last_payload['clientSignals']->canvasBlank ) );
+$fp_state = new Fake_State();
+list( $scorer ) = make_scorer( $rows, $client, $fp_state );
+check( 'workspace tier on: scored and fingerprint fields sent', 'scored' === $scorer->run( 'login', $good, array() ) && false === $client->last_payload['clientSignals']->canvasBlank && 12 === $client->last_payload['clientSignals']->fontCount && 'ANGLE' === $client->last_payload['clientSignals']->webglRenderer );
+check( 'workspace tier on: flag remembered for the page script', true === $fp_state->fingerprints );
+
+$rows   = array();
+$client = ok_client();
+$off_state = new Fake_State();
+$off_state->fingerprints = true; // Stale cache says on; the session says off.
+list( $scorer ) = make_scorer( $rows, $client, $off_state );
+$scorer->run( 'login', $good, array() );
+check( 'workspace tier off: fingerprint fields stripped even if the page sent them', ! isset( $client->last_payload['clientSignals']->canvasBlank ) && ! isset( $client->last_payload['clientSignals']->fontCount ) && ! isset( $client->last_payload['clientSignals']->webglRenderer ) );
+check( 'workspace tier off: stale flag corrected', false === $off_state->fingerprints );
 
 $rows   = array();
 $client = ok_client();

@@ -61,9 +61,13 @@ By default the submission is allowed and logged as "No browser evidence". You ca
 
 For a submission to a protected form or path: interaction timing, pointer movement, wheel and scroll timing, key press timing (never which keys), coarse browser and device details, the visitor's IP address, and request headers (User-Agent, Accept-Language, Sec-CH-UA, Sec-Fetch, the order of the request headers, proxy-related headers, whether a cookie was present as a yes/no flag, and any Web Bot Auth signature headers). For protected paths the page path is also sent. Volance stores the IP address only as a one-way hash. See the External services section.
 
+= Does it use fingerprinting? =
+
+Not by default. Like the Volance website's install snippet, the plugin follows your Volance workspace setting. Only if you switch the fingerprint tier on in the Volance portal does the page script also read whether a blank canvas test passes, how many fonts are installed and the name of the graphics renderer, and send those with the submission. The plugin shows a notice on its Setup tab while the tier is on, and adds a sentence about it to the consent notice. If you turn the tier off, the plugin stops collecting and sending those fields; it can take up to 12 hours for the page script to notice, and the plugin removes the fields before sending in the meantime.
+
 = What is never collected? =
 
-The characters a visitor types, form values, clipboard contents, page text and cookie values. The plugin and the Volance service both reject content-bearing fields. The plugin does not forward the canvas, font or WebGL fingerprint tier.
+The characters a visitor types, form values, clipboard contents, page text and cookie values. The plugin and the Volance service both reject content-bearing fields. Fingerprinting is off unless you switch on the fingerprint tier in your Volance workspace (see the next question).
 
 = How do I ask visitors for consent? =
 
@@ -103,6 +107,7 @@ This plugin connects to the Volance service, operated by Oops Games LLC, to esti
 
 * interaction timing, pointer movement, wheel and scroll timing, key press timing (never which keys) and coarse browser and device descriptors recorded by the script;
 * the visitor's IP address, which Volance stores only as a one-way hash;
+* only if your workspace has the fingerprint tier on: a blank-canvas test result, the installed font count and the graphics renderer name;
 * the visitor's request headers: User-Agent, Accept-Language, Sec-CH-UA, Sec-Fetch-Site / Sec-Fetch-Mode, the order of the header names, proxy-related headers, whether a cookie was present (yes or no, never its value) and, for signed agents, the Web Bot Auth signature headers;
 * for a protected path, the page path (without query string).
 
@@ -130,7 +135,7 @@ Volance Privacy Policy: https://volance.com/privacy
 * New: forward Web Bot Auth signed-agent headers so declared agents are recognised.
 * New: option to score submissions that arrive without browser evidence, and an "Always on" consent mode.
 * New: hooks `volance_detection_decision`, `_flagged`, `_blocked` and filters `volance_detection_block_message`, `_skip_user`, `_load_collector`.
-* Changed: the plugin no longer stops when the workspace fingerprint tier is on.
+* New: fingerprint tier support, identical to the Volance install snippet. Off by default; only when the workspace turns it on does the page script read a blank-canvas test, the installed font count and the graphics renderer name. The Setup tab shows a notice and the consent notice mentions it.
 
 = 0.1.0 =
 * First release: settings, consent notice, observe-only scoring of login, registration and comment forms, activity log, plan and usage line.

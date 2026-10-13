@@ -64,10 +64,11 @@ async function boot( { consentMode = 'banner', stored = null, gpc = false } ) {
 			setItem: ( key, value ) => store.set( key, value ),
 		},
 	};
-	const collectorSource = 'export function createSiteCollector(){ globalThis.__collector.imports++; return { start(o){ globalThis.__collector.started = o; }, stop(){ globalThis.__collector.stopped++; }, snapshot(){ globalThis.__collector.snapshots++; return { clientSignals: { webdriver: false }, events: [ { type: "click", t: 5 } ] }; } }; }';
+	const collectorSource = 'export function createSiteCollector(options){ globalThis.__collector.imports++; globalThis.__collector.createdWith = options; return { start(o){ globalThis.__collector.started = o; }, stop(){ globalThis.__collector.stopped++; }, snapshot(){ globalThis.__collector.snapshots++; return { clientSignals: { webdriver: false }, events: [ { type: "click", t: 5 } ] }; } }; }';
 	globalThis.window.volanceDetectionConfig = {
 		collector: 'data:text/javascript,' + encodeURIComponent( collectorSource ),
 		consentMode,
+		collect: { fingerprints: true },
 		field: 'volance_snapshot',
 		storageKey: 'k',
 		sitePrivacyUrl: 'https://site.example/privacy',
@@ -105,6 +106,7 @@ function ok( label, fn ) { fn(); passed++; }
 		assert.equal( globalThis.__collector.imports, 1 );
 		assert.deepEqual( globalThis.__collector.started, { consent: true } );
 	} );
+	ok( 'collector is created with the workspace collect setting, like the Volance install snippet', () => assert.deepEqual( globalThis.__collector.createdWith, { fingerprints: true } ) );
 	ok( 'choice stored', () => assert.equal( w.store.get( 'k' ), 'granted' ) );
 	ok( 'banner removed', () => assert.equal( find( w.body, ( n ) => n.className === 'volance-detection-banner' ), null ) );
 

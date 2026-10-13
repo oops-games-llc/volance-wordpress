@@ -331,7 +331,7 @@ class Volance_Detection_Admin {
 		}
 
 		if ( $state->fingerprints() ) {
-			echo '<div class="notice notice-warning"><p>' . esc_html__( 'Your Volance workspace has the fingerprinting tier switched on. Volance Detection does not collect or send anything while it is on. Turn it off in the Volance portal, then use Test connection.', 'volance-detection' ) . '</p></div>';
+			echo '<div class="notice notice-info"><p>' . esc_html__( 'Your Volance workspace has the fingerprint tier switched on, so the page script also reads a blank-canvas test, the installed font count and the graphics renderer name, and sends them to Volance when a protected form is submitted. Mention this in your privacy notice. You can turn the tier off in the Volance portal.', 'volance-detection' ) . '</p></div>';
 		}
 
 		$error = $state->last_error();

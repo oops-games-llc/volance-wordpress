@@ -47,7 +47,7 @@ if ( config ) {
 		loading = true;
 		try {
 			const module = await import( config.collector );
-			const created = module.createSiteCollector();
+			const created = module.createSiteCollector( config.collect );
 			created.start( { consent: true } );
 			collector = created;
 		} catch ( error ) {

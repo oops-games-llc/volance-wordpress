@@ -22,6 +22,7 @@ collector from `https://app.volance.com/trace.js`.
 | Paths | Any page or REST route, one rule per line (`block /wp-json/wp/v2/comments`, `flag /pricing/*`); administrators exempt |
 | Dashboard | Overview stats, Activity log with evidence per entry, CSV export |
 | Policy | Workspace enforcement toggle and the fixed allow / block thresholds (`/api/trace/config`). Flag and block act only while workspace enforcement is on |
+| Fingerprint tier | Follows the workspace setting like the install snippet: off by default; when on, the script also sends canvas-blank, font count and WebGL renderer |
 | Agents | Web Bot Auth signature headers forwarded so declared agents are recognised |
 | Plan | Plan and monthly usage (`/api/trace/usage`) |
 | Safety | Fails open on any API error, timeout or 429 |

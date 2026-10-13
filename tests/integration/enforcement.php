@@ -47,9 +47,10 @@ add_filter(
 			return array( 'response' => array( 'code' => $code, 'message' => '' ), 'headers' => array(), 'body' => wp_json_encode( $body ), 'cookies' => array() );
 		};
 		if ( false !== strpos( $url, '/api/trace/session' ) ) {
-			return $json( 200, array( 'sessionId' => 'sid_1', 'manifest' => 'man_1', 'collect' => array( 'fingerprints' => false ) ) );
+			return $json( 200, array( 'sessionId' => 'sid_1', 'manifest' => 'man_1', 'collect' => array( 'fingerprints' => ! empty( $GLOBALS['mock']['fp'] ) ) ) );
 		}
 		if ( false !== strpos( $url, '/api/trace/score' ) ) {
+			$GLOBALS['mock']['last_score_body'] = isset( $args['body'] ) ? (string) $args['body'] : '';
 			if ( 200 !== $GLOBALS['mock']['score_status'] ) {
 				return $json( $GLOBALS['mock']['score_status'], array( 'error' => 'boom' ) );
 			}
@@ -225,6 +226,46 @@ $blocked = array_filter( $rows, static function ( $r ) {
 t( 'log records applied=block rows', count( $blocked ) >= 2 );
 t( 'log never stores the trust token or the IP', false === strpos( wp_json_encode( $rows ), 'tok_secret' ) && false === strpos( wp_json_encode( $rows ), '203.0.113.9' ) );
 
+// --- Fingerprint tier follows the workspace setting -------------------------------
+$fp_snapshot = wp_json_encode(
+	array(
+		'clientSignals' => array( 'webdriver' => false, 'canvasBlank' => false, 'fontCount' => 14, 'webglRenderer' => 'ANGLE (Test GPU)' ),
+		'events'        => array( array( 'type' => 'click', 't' => 50, 'x' => 0.3, 'y' => 0.4 ) ),
+	)
+);
+configure( array( 'login' => 'observe' ) );
+Volance_Detection_Forms::init();
+( new Volance_Detection_State() )->set_fingerprints( false );
+
+reset_request();
+$GLOBALS['mock']['fp'] = false;
+$_POST = array( 'log' => 'vtest', 'pwd' => 'x', 'volance_snapshot' => wp_slash( $fp_snapshot ) );
+Volance_Detection_Forms::guard( 'block', '', '' );
+$GLOBALS['mock']['fp'] = false;
+t( 'tier off: fingerprint fields are not sent', false === strpos( $GLOBALS['mock']['last_score_body'], 'fontCount' ) && false === strpos( $GLOBALS['mock']['last_score_body'], 'webglRenderer' ) && false !== strpos( $GLOBALS['mock']['last_score_body'], 'webdriver' ) );
+
+reset_request();
+$GLOBALS['mock']['fp'] = true;
+$_POST = array( 'log' => 'vtest', 'pwd' => 'x', 'volance_snapshot' => wp_slash( $fp_snapshot ) );
+Volance_Detection_Forms::guard( 'block', '', '' );
+t( 'tier on: fingerprint fields are sent', false !== strpos( $GLOBALS['mock']['last_score_body'], '"fontCount":14' ) && false !== strpos( $GLOBALS['mock']['last_score_body'], 'ANGLE (Test GPU)' ) && false !== strpos( $GLOBALS['mock']['last_score_body'], 'canvasBlank' ) );
+t( 'tier on: the flag is remembered for the page script', ( new Volance_Detection_State() )->fingerprints() );
+
+update_option( Volance_Detection_Settings::OPTION, array_merge( Volance_Detection_Settings::get(), array( 'consent_mode' => 'always' ) ) );
+ob_start();
+$ref = new ReflectionMethod( 'Volance_Detection_Frontend', 'print_assets' );
+$ref->setAccessible( true );
+$ref->invoke( null );
+$assets = ob_get_clean();
+t( 'tier on: page config tells the script to collect fingerprints and the notice says so', false !== strpos( $assets, '"collect":{"fingerprints":true}' ) && false !== strpos( $assets, 'graphics renderer' ) );
+
+$GLOBALS['mock']['fp'] = false;
+reset_request();
+$_POST = array( 'log' => 'vtest', 'pwd' => 'x', 'volance_snapshot' => wp_slash( $fp_snapshot ) );
+Volance_Detection_Forms::guard( 'block', '', '' );
+t( 'tier switched off in the workspace: the cached flag corrects itself on the next score', ! ( new Volance_Detection_State() )->fingerprints() );
+$GLOBALS['mock']['fp'] = false;
+
 // --- Workspace enforcement off ----------------------------------------------------
 configure( array( 'login' => 'block' ) );
 Volance_Detection_Forms::init();
@@ -297,7 +338,7 @@ $d = Volance_Detection_Paths::decide();
 t( 'path: Volance error fails open', $d && 'allow' === $d['result']['applied'] );
 $GLOBALS['mock']['score_status'] = 200;
 
-$path_rows = $wpdb->get_results( "SELECT * FROM {$table} WHERE form = 'path' ORDER BY id DESC LIMIT 5" );
+$path_rows = $wpdb->get_results( "SELECT * FROM {$table} WHERE form = 'path' AND note <> '' ORDER BY id DESC LIMIT 5" );
 t( 'path rows logged with the rule as the note', $path_rows && '/wp-json/myplugin/v1/*' === $path_rows[ count( $path_rows ) - 1 ]->note );
 
 // --- Admin screens render ---------------------------------------------------------
