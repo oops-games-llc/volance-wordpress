@@ -1,0 +1,11 @@
+{
+	"$schema": "https://playground.wordpress.net/blueprint-schema.json",
+	"preferredVersions": { "php": "8.3", "wp": "latest" },
+	"steps": [
+		{ "step": "installPlugin", "pluginData": { "resource": "wordpress.org/plugins", "slug": "woocommerce" }, "options": { "activate": true } },
+		{ "step": "installPlugin", "pluginData": { "resource": "wordpress.org/plugins", "slug": "contact-form-7" }, "options": { "activate": true } },
+		{ "step": "installPlugin", "pluginData": { "resource": "wordpress.org/plugins", "slug": "wpforms-lite" }, "options": { "activate": true } },
+		{ "step": "activatePlugin", "pluginPath": "volance-detection/volance-detection.php" },
+		{ "step": "runPHP", "code": "<?php require '/tests/forms-plugins.php';" }
+	]
+}

@@ -14,3 +14,10 @@ npx @wp-playground/cli@latest run-blueprint ^
 `run-blueprint` does not print PHP output, so results are written to
 `tests/integration/result.txt` (git-ignored). A passing run ends with
 `INTEGRATION: N passed, 0 failed`.
+
+Third-party form plugins are covered by a second script. It installs WooCommerce,
+Contact Form 7 and WPForms Lite from wordpress.org (PHP 8.3 is required by CF7) and stubs
+Gravity Forms:
+
+```n--blueprint=tests/integration/forms-plugins.blueprint.json   (result: tests/integration/result-forms.txt)
+```n
