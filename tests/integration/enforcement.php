@@ -64,7 +64,7 @@ add_filter(
 					'evidence'       => array( 'events' => 3, 'behavioural' => true ),
 					'signals'        => array( array( 'id' => 'webdriver', 'layer' => 1, 'value' => 0, 'fired' => true, 'detail' => 'test' ) ),
 					'requestId'      => 'req_' . count( $GLOBALS['mock']['calls'] ),
-							'enforce'        => ! isset( $GLOBALS['mock']['enforce'] ) || $GLOBALS['mock']['enforce'],
+					'enforce'        => ! isset( $GLOBALS['mock']['enforce'] ) || $GLOBALS['mock']['enforce'],
 					'trustToken'     => 'tok_secret',
 				)
 			);
@@ -257,6 +257,7 @@ $ref = new ReflectionMethod( 'Volance_Detection_Frontend', 'print_assets' );
 $ref->setAccessible( true );
 $ref->invoke( null );
 $assets = ob_get_clean();
+t( 'tier on: consent is stored under a separate key so visitors are asked again', false !== strpos( $assets, 'volanceDetectionConsentFp' ) );
 t( 'tier on: page config tells the script to collect fingerprints and the notice says so', false !== strpos( $assets, '"collect":{"fingerprints":true}' ) && false !== strpos( $assets, 'graphics renderer' ) );
 
 $GLOBALS['mock']['fp'] = false;

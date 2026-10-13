@@ -63,7 +63,7 @@ For a submission to a protected form or path: interaction timing, pointer moveme
 
 = Does it use fingerprinting? =
 
-Not by default. Like the Volance website's install snippet, the plugin follows your Volance workspace setting. Only if you switch the fingerprint tier on in the Volance portal does the page script also read whether a blank canvas test passes, how many fonts are installed and the name of the graphics renderer, and send those with the submission. The plugin shows a notice on its Setup tab while the tier is on, and adds a sentence about it to the consent notice. If you turn the tier off, the plugin stops collecting and sending those fields; it can take up to 12 hours for the page script to notice, and the plugin removes the fields before sending in the meantime.
+Not by default. Like the Volance website's install snippet, the plugin follows your Volance workspace setting. Only if you switch the fingerprint tier on in the Volance portal does the page script also read whether a blank canvas test passes, how many fonts are installed and the name of the graphics renderer, and send those with the submission. The plugin shows a notice on its Setup tab while the tier is on, and adds a sentence about it to the consent notice. Turning the tier on or off makes the built-in notice ask every visitor again. If you turn the tier off, the plugin stops collecting and sending those fields; it can take up to 12 hours for the page script to notice, and the plugin removes the fields before sending in the meantime.
 
 = What is never collected? =
 

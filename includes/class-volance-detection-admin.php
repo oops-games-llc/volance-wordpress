@@ -536,7 +536,9 @@ class Volance_Detection_Admin {
 			);
 			$result['ok']      = $saved['ok'];
 			$result['message'] = $saved['ok'] ? __( 'Policy saved to Volance.', 'volance-detection' ) : $saved['error'];
-		}		set_transient( 'volance_detection_test_' . get_current_user_id(), $result, 120 );
+		}
+
+		set_transient( 'volance_detection_test_' . get_current_user_id(), $result, 120 );
 		wp_safe_redirect( self::url( 'setup' ) );
 		exit;
 	}

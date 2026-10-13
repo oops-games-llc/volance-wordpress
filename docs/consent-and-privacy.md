@@ -58,7 +58,8 @@ privacy guide:
   does the page script read a blank-canvas test, the installed font count and the
   graphics renderer name, and the scorer sends them. The plugin strips them unless
   the session response says collect.fingerprints is true (the same rule the
-  Volance API applies). While the tier is on, the Setup tab shows a notice, the
+  Volance API applies). Turning the tier on or off changes the consent storage key,
+  so the built-in banner asks every visitor again. While the tier is on, the Setup tab shows a notice, the
   consent banner adds a sentence about it, and the privacy-policy text should be
   extended by the site owner. The cached flag refreshes on every score, on Test
   connection and twice a day.
@@ -67,7 +68,7 @@ privacy guide:
   activity log is also purged after 30 days and holds no IP, browser details or
   form content.
 - **Enforcement:** forms start in Observe mode. Flag and Block act on Volance's
-  recommended action; any API error fails open.
+  recommended action, and only while enforcement is on in the Volance workspace; any API error fails open.
 - **Hosting and processors:** Volance runs on Google Firebase (`us-central1`)
   behind Cloudflare. It also uses Resend (email) and Stripe (billing) for account
   services. See https://volance.com/privacy for the authoritative list.

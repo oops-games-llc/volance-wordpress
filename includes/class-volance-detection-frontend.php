@@ -98,7 +98,8 @@ class Volance_Detection_Frontend {
 			'consentMode'    => $settings['consent_mode'],
 			'injectForms'    => (bool) Volance_Detection_Paths::current_rule(),
 			'field'          => Volance_Detection_Forms::FIELD,
-			'storageKey'     => 'volanceDetectionConsent',
+			// Turning the fingerprint tier on or off changes what visitors agreed to, so it uses a separate key and the banner asks again.
+			'storageKey'     => $tier_on ? 'volanceDetectionConsentFp' : 'volanceDetectionConsent',
 			'sitePrivacyUrl' => function_exists( 'get_privacy_policy_url' ) ? get_privacy_policy_url() : '',
 			'volanceUrl'     => 'https://volance.com/privacy',
 			'strings'        => array(
