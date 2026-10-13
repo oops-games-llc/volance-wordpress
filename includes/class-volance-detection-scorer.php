@@ -160,6 +160,7 @@ class Volance_Detection_Scorer {
 				'response'    => $compact,
 				'action'      => $recommended,
 				'applied'     => $applied,
+				'note'        => isset( $options['note'] ) ? substr( (string) $options['note'], 0, 190 ) : '',
 			),
 			$recommended,
 			$applied,

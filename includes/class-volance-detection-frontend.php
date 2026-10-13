@@ -55,12 +55,13 @@ class Volance_Detection_Frontend {
 		$checkout = Volance_Detection_Settings::form_enabled( 'wc_checkout' ) && function_exists( 'is_checkout' ) && is_checkout();
 		// Contact Form 7 forms can sit on any page, so load on singular pages when it is protected.
 		$contact = Volance_Detection_Settings::form_enabled( 'cf7' ) && Volance_Detection_Settings::form_available( 'cf7' ) && is_singular();
+		$paths   = (bool) Volance_Detection_Paths::current_rule();
 		/**
 		 * Filter whether the collector loads on the current front-end page.
 		 *
 		 * @param bool $load Default decision.
 		 */
-		if ( apply_filters( 'volance_detection_load_collector', $comments || $shop || $checkout || $contact ) ) {
+		if ( apply_filters( 'volance_detection_load_collector', $comments || $shop || $checkout || $contact || $paths ) ) {
 			self::print_assets();
 		}
 	}
@@ -88,6 +89,7 @@ class Volance_Detection_Frontend {
 		$config   = array(
 			'collector'      => VOLANCE_DETECTION_COLLECTOR,
 			'consentMode'    => $settings['consent_mode'],
+			'injectForms'    => (bool) Volance_Detection_Paths::current_rule(),
 			'field'          => Volance_Detection_Forms::FIELD,
 			'storageKey'     => 'volanceDetectionConsent',
 			'sitePrivacyUrl' => function_exists( 'get_privacy_policy_url' ) ? get_privacy_policy_url() : '',

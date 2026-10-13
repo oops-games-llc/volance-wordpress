@@ -90,6 +90,15 @@ class Volance_Detection_Forms {
 				add_filter( 'wpcf7_form_hidden_fields', array( __CLASS__, 'cf7_field' ) );
 				add_filter( 'wpcf7_spam', array( __CLASS__, 'handle_cf7' ), 10, 1 );
 				break;
+			case 'wpforms':
+				add_action( 'wpforms_display_submit_before', array( __CLASS__, 'print_field' ) );
+				add_filter( 'wpforms_process_initial_errors', array( __CLASS__, 'handle_wpforms' ), 10, 1 );
+				break;
+			case 'gravity':
+				add_filter( 'gform_form_tag', array( __CLASS__, 'gravity_field' ), 10, 1 );
+				add_filter( 'gform_validation', array( __CLASS__, 'handle_gravity' ), 10, 1 );
+				add_filter( 'gform_validation_message', array( __CLASS__, 'gravity_message' ), 10, 1 );
+				break;
 		}
 	}
 
@@ -261,16 +270,95 @@ class Volance_Detection_Forms {
 	}
 
 	/**
-	 * Score a submission once per request and remember the result.
+	 * WPForms: a blocked submission gets a form-level error.
 	 *
-	 * @param string $form Form key.
+	 * @param array $errors Errors keyed by form id.
+	 * @return array
+	 */
+	public static function handle_wpforms( $errors ) {
+		self::check( 'wpforms' );
+		if ( self::is_blocked( 'wpforms' ) ) {
+			$errors = is_array( $errors ) ? $errors : array();
+			// WPForms keys errors by form id; the form id is not needed to show a header message.
+			$form_id = isset( $_POST['wpforms']['id'] ) ? absint( $_POST['wpforms']['id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- WPForms verifies its own submission.
+			$errors[ $form_id ]['header'] = self::message( 'wpforms' );
+		}
+		return $errors;
+	}
+
+	/**
+	 * Gravity Forms: add the hidden field to every form.
+	 *
+	 * @param string $form_tag Opening form tag.
+	 * @return string
+	 */
+	public static function gravity_field( $form_tag ) {
+		return $form_tag . '<input type="hidden" name="' . esc_attr( self::FIELD ) . '" value="" data-volance-snapshot="1" />';
+	}
+
+	/**
+	 * Gravity Forms: fail validation for a blocked submission.
+	 *
+	 * @param array $result Validation result.
+	 * @return array
+	 */
+	public static function handle_gravity( $result ) {
+		self::check( 'gravity' );
+		if ( self::is_blocked( 'gravity' ) && is_array( $result ) ) {
+			$result['is_valid'] = false;
+		}
+		return $result;
+	}
+
+	/**
+	 * Gravity Forms: the message shown above a form that failed validation because of a block.
+	 *
+	 * @param string $message Existing message markup.
+	 * @return string
+	 */
+	public static function gravity_message( $message ) {
+		if ( self::is_blocked( 'gravity' ) ) {
+			return '<div class="validation_error">' . esc_html( self::message( 'gravity' ) ) . '</div>';
+		}
+		return $message;
+	}
+
+	/**
+	 * Score a request for a protected path (used by Volance_Detection_Paths).
+	 *
+	 * @param string $mode observe|flag|block.
+	 * @param string $page URL path being protected (no query).
+	 * @param string $note The matching rule, shown in the log.
 	 * @return array Result (status, recommended, applied, score, label).
 	 */
-	private static function check( $form ) {
+	public static function guard( $mode, $page, $note ) {
+		return self::check( 'path', $mode, $page, $note );
+	}
+
+	/**
+	 * The message shown to a blocked visitor (public for the paths handler).
+	 *
+	 * @param string $form Form key.
+	 * @return string
+	 */
+	public static function block_message( $form ) {
+		return self::message( $form );
+	}
+
+	/**
+	 * Score a submission once per request and remember the result.
+	 *
+	 * @param string      $form Form key.
+	 * @param string|null $mode Mode override (defaults to the form's saved mode).
+	 * @param string      $page URL path to send as `page` (optional).
+	 * @param string      $note Note stored on the log row (optional).
+	 * @return array Result (status, recommended, applied, score, label).
+	 */
+	private static function check( $form, $mode = null, $page = '', $note = '' ) {
 		if ( isset( self::$results[ $form ] ) ) {
 			return self::$results[ $form ];
 		}
-		$mode   = Volance_Detection_Settings::form_mode( $form );
+		$mode   = null === $mode ? Volance_Detection_Settings::form_mode( $form ) : $mode;
 		$result = array(
 			'status'      => 'skipped',
 			'recommended' => 'allow',
@@ -299,6 +387,8 @@ class Volance_Detection_Forms {
 			'mode'                   => $mode,
 			'score_without_evidence' => $score_empty,
 			'disclosure'             => $disclosure,
+			'page'                   => $page,
+			'note'                   => $note,
 		);
 		$signals = Volance_Detection_Evidence::request_signals();
 

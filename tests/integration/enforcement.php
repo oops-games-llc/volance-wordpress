@@ -224,6 +224,68 @@ $blocked = array_filter( $rows, static function ( $r ) {
 t( 'log records applied=block rows', count( $blocked ) >= 2 );
 t( 'log never stores the trust token or the IP', false === strpos( wp_json_encode( $rows ), 'tok_secret' ) && false === strpos( wp_json_encode( $rows ), '203.0.113.9' ) );
 
+// --- Protected paths ---------------------------------------------------------------
+function configure_paths( $text, $on_no_evidence = 'score' ) {
+	configure( array(), $on_no_evidence );
+	$settings          = get_option( Volance_Detection_Settings::OPTION );
+	$settings['paths'] = Volance_Detection_Settings::parse_paths( $text );
+	update_option( Volance_Detection_Settings::OPTION, $settings );
+}
+function request_to( $uri, $method = 'POST' ) {
+	reset_request();
+	$_GET                      = array();
+	$_SERVER['REQUEST_URI']    = $uri;
+	$_SERVER['REQUEST_METHOD'] = $method;
+}
+
+configure_paths( "block /wp-json/myplugin/v1/*\nobserve /pricing/\n/contact/" );
+$GLOBALS['mock']['action'] = 'block';
+
+request_to( '/wp-json/myplugin/v1/orders?x=1' );
+$d = Volance_Detection_Paths::decide();
+t( 'path block: REST route blocked on request signals alone', $d && 'block' === $d['result']['applied'] && 2 === count( $GLOBALS['mock']['calls'] ) );
+
+request_to( '/index.php' );
+$_GET['rest_route'] = '/myplugin/v1/orders';
+t( 'path: ?rest_route= is treated as /wp-json/…', '/wp-json/myplugin/v1/orders' === Volance_Detection_Paths::current_path() );
+$d = Volance_Detection_Paths::decide();
+t( 'path block: rest_route request blocked', $d && 'block' === $d['result']['applied'] );
+
+request_to( '/somewhere-else/' );
+t( 'path: unmatched URL is not scored', null === Volance_Detection_Paths::decide() && array() === $GLOBALS['mock']['calls'] );
+
+request_to( '/wp-json/myplugin/v1/orders', 'OPTIONS' );
+t( 'path: OPTIONS preflight is never scored', null === Volance_Detection_Paths::decide() );
+
+request_to( '/pricing/' , 'GET' );
+$d = Volance_Detection_Paths::decide();
+t( 'path observe: recommends block but allows, no call before the response', $d && 'allow' === $d['result']['applied'] && array() === $GLOBALS['mock']['calls'] );
+
+$_SERVER['REQUEST_URI'] = '/contact/';
+reset_request();
+$_SERVER['REQUEST_URI']    = '/contact/';
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$d = Volance_Detection_Paths::decide();
+t( 'path: rule without a mode defaults to observe', $d && 'allow' === $d['result']['applied'] );
+
+configure_paths( 'block /wp-json/myplugin/v1/*' );
+request_to( '/wp-json/myplugin/v1/orders' );
+$admin_user = get_user_by( 'login', 'vtest' );
+$admin_user->set_role( 'administrator' );
+wp_set_current_user( $admin_user->ID );
+t( 'path: administrators are exempt', null === Volance_Detection_Paths::decide() && array() === $GLOBALS['mock']['calls'] );
+wp_set_current_user( 0 );
+
+configure_paths( 'block /wp-json/myplugin/v1/*' );
+request_to( '/wp-json/myplugin/v1/orders' );
+$GLOBALS['mock']['score_status'] = 500;
+$d = Volance_Detection_Paths::decide();
+t( 'path: Volance error fails open', $d && 'allow' === $d['result']['applied'] );
+$GLOBALS['mock']['score_status'] = 200;
+
+$path_rows = $wpdb->get_results( "SELECT * FROM {$table} WHERE form = 'path' ORDER BY id DESC LIMIT 5" );
+t( 'path rows logged with the rule as the note', $path_rows && '/wp-json/myplugin/v1/*' === $path_rows[ count( $path_rows ) - 1 ]->note );
+
 // --- Admin screens render ---------------------------------------------------------
 configure( array( 'login' => 'block', 'comments' => 'flag', 'register' => 'observe' ) );
 $admin = get_user_by( 'login', 'vtest' );

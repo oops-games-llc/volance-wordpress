@@ -21,7 +21,7 @@ class Volance_Detection_Settings {
 	 * @return string[]
 	 */
 	public static function form_keys() {
-		return array( 'login', 'register', 'lostpassword', 'comments', 'wc_login', 'wc_register', 'wc_checkout', 'cf7' );
+		return array( 'login', 'register', 'lostpassword', 'comments', 'wc_login', 'wc_register', 'wc_checkout', 'cf7', 'wpforms', 'gravity' );
 	}
 
 	/**
@@ -38,6 +38,10 @@ class Volance_Detection_Settings {
 				return class_exists( 'WooCommerce' );
 			case 'cf7':
 				return defined( 'WPCF7_VERSION' );
+			case 'wpforms':
+				return function_exists( 'wpforms' );
+			case 'gravity':
+				return class_exists( 'GFForms' );
 			default:
 				return true;
 		}
@@ -55,7 +59,89 @@ class Volance_Detection_Settings {
 			'consent_mode'   => 'banner',
 			'forms'          => array(),
 			'on_no_evidence' => 'allow',
+			'paths'          => array(),
 		);
+	}
+
+	/**
+	 * Parse the "protected paths" textarea. One rule per line: an optional mode
+	 * (observe, flag or block) then a URL path, where * matches anything.
+	 * Examples: `/contact/`, `flag /pricing/*`, `block /wp-json/myplugin/v1/*`.
+	 *
+	 * @param string $text Raw textarea value.
+	 * @return array[] Each {pattern: string, mode: string}.
+	 */
+	public static function parse_paths( $text ) {
+		$rules = array();
+		foreach ( preg_split( '/\r\n|\r|\n/', (string) $text ) as $line ) {
+			$line = trim( $line );
+			if ( '' === $line || '#' === $line[0] ) {
+				continue;
+			}
+			$mode = 'observe';
+			if ( 1 === preg_match( '/^(observe|flag|block)\s+(\S.*)$/i', $line, $m ) ) {
+				$mode = strtolower( $m[1] );
+				$line = trim( $m[2] );
+			}
+			// A path only: strip any scheme/host and query, keep a leading slash, no control characters.
+			$line = preg_replace( '#^https?://[^/]+#i', '', $line );
+			$line = preg_replace( '/[?#].*$/', '', (string) $line );
+			$line = preg_replace( '/[^\x21-\x7E]/', '', (string) $line );
+			if ( '' === $line ) {
+				continue;
+			}
+			if ( '/' !== $line[0] ) {
+				$line = '/' . $line;
+			}
+			$rules[] = array(
+				'pattern' => substr( $line, 0, 200 ),
+				'mode'    => $mode,
+			);
+			if ( count( $rules ) >= 50 ) {
+				break;
+			}
+		}
+		return $rules;
+	}
+
+	/**
+	 * The protected-path rules as editable text.
+	 *
+	 * @return string
+	 */
+	public static function paths_text() {
+		$settings = self::get();
+		$lines    = array();
+		foreach ( (array) $settings['paths'] as $rule ) {
+			if ( isset( $rule['pattern'], $rule['mode'] ) ) {
+				$lines[] = $rule['mode'] . ' ' . $rule['pattern'];
+			}
+		}
+		return implode( "\n", $lines );
+	}
+
+	/**
+	 * The first rule whose pattern matches a URL path.
+	 *
+	 * Matching ignores a trailing slash and case; * matches any characters.
+	 *
+	 * @param string  $path  URL path (no query), relative to the site root.
+	 * @param array[] $rules Rules from parse_paths().
+	 * @return array|null The rule, or null.
+	 */
+	public static function match_path( $path, array $rules ) {
+		$path = strtolower( '/' . ltrim( rtrim( (string) $path, '/' ), '/' ) );
+		foreach ( $rules as $rule ) {
+			if ( ! isset( $rule['pattern'] ) ) {
+				continue;
+			}
+			$pattern = strtolower( '/' . ltrim( rtrim( (string) $rule['pattern'], '/' ), '/' ) );
+			$regex   = '#^' . str_replace( '\*', '.*', preg_quote( $pattern, '#' ) ) . '$#';
+			if ( 1 === preg_match( $regex, $path ) ) {
+				return $rule;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -245,6 +331,7 @@ class Volance_Detection_Settings {
 			}
 		}
 		$out['forms'] = $forms;
+		$out['paths'] = isset( $input['paths_text'] ) ? self::parse_paths( wp_unslash( (string) $input['paths_text'] ) ) : (array) $current['paths'];
 
 		if ( $out['enabled'] && '' !== self::keys_problem( $out['public_key'], self::secret_key() ) ) {
 			// Cannot switch on without a valid key pair.

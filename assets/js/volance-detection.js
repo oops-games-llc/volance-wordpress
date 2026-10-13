@@ -132,7 +132,13 @@ if ( config ) {
 		if ( ! collector || ! form || typeof form.querySelector !== 'function' ) {
 			return;
 		}
-		const field = form.querySelector( 'input[name="' + config.field + '"]' );
+		let field = form.querySelector( 'input[name="' + config.field + '"]' );
+		if ( ! field && config.injectForms && String( form.method ).toLowerCase() === 'post' ) {
+			field = document.createElement( 'input' );
+			field.type = 'hidden';
+			field.name = config.field;
+			form.appendChild( field );
+		}
 		if ( ! field ) {
 			return;
 		}

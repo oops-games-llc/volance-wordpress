@@ -42,6 +42,7 @@ require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-export.ph
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-log.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-scorer.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-forms.php';
+require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-paths.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-frontend.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/class-volance-detection-admin.php';
 require_once VOLANCE_DETECTION_DIR . 'includes/admin/class-volance-detection-admin-overview.php';
@@ -99,6 +100,7 @@ add_action( 'volance_detection_daily', 'volance_detection_run_daily' );
 function volance_detection_boot() {
 	Volance_Detection_Log::maybe_upgrade();
 	Volance_Detection_Forms::init();
+	Volance_Detection_Paths::init();
 	Volance_Detection_Frontend::init();
 	if ( is_admin() ) {
 		Volance_Detection_Admin::init();

@@ -451,5 +451,35 @@ check( 'set_config POSTs to /api/trace/config with the secret key', 'POST' === $
 $client->verify_token( 'tok_1' );
 check( 'verify_token POSTs the trust token', false !== strpos( $GLOBALS['vd_http'][1]['url'], '/api/trace/verify-token' ) && false !== strpos( $GLOBALS['vd_http'][1]['args']['body'], 'tok_1' ) );
 
+// --- Protected paths --------------------------------------------------------
+$rules = Volance_Detection_Settings::parse_paths( "block /wp-json/myplugin/v1/*\nflag /pricing/\n/contact/\n# a comment\n\n  BLOCK   https://example.com/checkout?x=1#top  \nsubscribe\nobserve\t/a b" );
+check( 'paths: modes parsed', 'block' === $rules[0]['mode'] && 'flag' === $rules[1]['mode'] && 'observe' === $rules[2]['mode'] );
+check( 'paths: comments and blanks skipped', 6 === count( $rules ) );
+check( 'paths: URL host, query and fragment stripped', '/checkout' === $rules[3]['pattern'] && 'block' === $rules[3]['mode'] );
+check( 'paths: leading slash added', '/subscribe' === $rules[4]['pattern'] );
+check( 'paths: whitespace inside a path removed', '/ab' === $rules[5]['pattern'] );
+check( 'paths: empty text gives no rules', array() === Volance_Detection_Settings::parse_paths( "  \n#x" ) );
+$many = implode( "\n", array_map( static function ( $i ) { return "/p{$i}"; }, range( 1, 80 ) ) );
+check( 'paths: capped at 50 rules', 50 === count( Volance_Detection_Settings::parse_paths( $many ) ) );
+
+$rules = Volance_Detection_Settings::parse_paths( "block /wp-json/myplugin/v1/*\nflag /pricing/\n/contact/" );
+$m = Volance_Detection_Settings::match_path( '/wp-json/myplugin/v1/orders/12', $rules );
+check( 'match: wildcard', $m && 'block' === $m['mode'] );
+$m = Volance_Detection_Settings::match_path( '/pricing', $rules );
+check( 'match: trailing slash ignored', $m && 'flag' === $m['mode'] );
+$m = Volance_Detection_Settings::match_path( '/CONTACT/', $rules );
+check( 'match: case ignored', $m && 'observe' === $m['mode'] );
+check( 'match: no partial matches', null === Volance_Detection_Settings::match_path( '/pricing/enterprise', $rules ) && null === Volance_Detection_Settings::match_path( '/contact-us', $rules ) && null === Volance_Detection_Settings::match_path( '/x/wp-json/myplugin/v1/a', $rules ) );
+check( 'match: regex characters in a rule are literal', null === Volance_Detection_Settings::match_path( '/aXb', Volance_Detection_Settings::parse_paths( '/a.b' ) ) );
+check( 'match: no rules, no match', null === Volance_Detection_Settings::match_path( '/', array() ) );
+
+reset_world();
+$out = Volance_Detection_Settings::sanitize( array( 'paths_text' => "flag /pricing/\njunk" ) );
+check( 'sanitize saves path rules', 2 === count( $out['paths'] ) && 'flag' === $out['paths'][0]['mode'] );
+update_option( 'volance_detection_settings', $out );
+check( 'paths_text round-trips', "flag /pricing/\nobserve /junk" === Volance_Detection_Settings::paths_text() );
+$out = Volance_Detection_Settings::sanitize( array( 'enabled' => '' ) );
+check( 'sanitize keeps saved rules when the field is absent', 2 === count( $out['paths'] ) );
+
 echo "\n{$passed} passed, {$failed} failed\n";
 exit( $failed > 0 ? 1 : 0 );

@@ -179,6 +179,9 @@ class Volance_Detection_Admin {
 			'wc_register'  => __( 'WooCommerce registration', 'volance-detection' ),
 			'wc_checkout'  => __( 'WooCommerce checkout', 'volance-detection' ),
 			'cf7'          => __( 'Contact Form 7', 'volance-detection' ),
+			'wpforms'      => __( 'WPForms', 'volance-detection' ),
+			'gravity'      => __( 'Gravity Forms', 'volance-detection' ),
+			'path'         => __( 'Protected path', 'volance-detection' ),
 		);
 		return $labels[ $key ] ?? $key;
 	}
@@ -410,6 +413,13 @@ class Volance_Detection_Admin {
 							</p>
 						<?php endforeach; ?>
 						<p class="description"><?php esc_html_e( 'Observe scores after the page has been sent and never affects a visitor. Flag and Block score before the request completes, so a submission can wait up to a few seconds if Volance is slow. If Volance cannot be reached the request is always allowed.', 'volance-detection' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="volance-paths"><?php esc_html_e( 'Protected paths', 'volance-detection' ); ?></label></th>
+					<td>
+						<textarea id="volance-paths" class="large-text code" rows="5" name="<?php echo esc_attr( Volance_Detection_Settings::OPTION ); ?>[paths_text]" placeholder="block /wp-json/myplugin/v1/*&#10;flag /pricing/&#10;/contact/"><?php echo esc_textarea( Volance_Detection_Settings::paths_text() ); ?></textarea>
+						<p class="description"><?php esc_html_e( 'Protect any URL: a REST endpoint, a custom form page or a whole section. One rule per line: an optional mode (observe, flag or block, default observe) then a path, where * matches anything. Any form on a protected page is covered automatically. Each matching request uses one of your monthly scores. Administrators are never blocked.', 'volance-detection' ); ?></p>
 					</td>
 				</tr>
 				<tr>
