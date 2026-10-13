@@ -45,11 +45,17 @@ class Volance_Detection_Decision {
 	 * Decide what the plugin does.
 	 *
 	 * @param string $mode   Form mode: observe|flag|block (anything else = observe).
-	 * @param mixed  $action Volance's recommended action.
+	 * @param mixed  $action  Volance's recommended action.
+	 * @param bool   $enforce Whether the Volance workspace has enforcement on (the score response's
+	 *                        `enforce` flag). When off, or paused because the plan quota is used up,
+	 *                        nothing is flagged or blocked; the recommendation is still logged.
 	 * @return string allow|flag|block, what the plugin applies.
 	 */
-	public static function resolve( $mode, $action ) {
+	public static function resolve( $mode, $action, $enforce = true ) {
 		$action = self::normalize_action( $action );
+		if ( ! $enforce ) {
+			return self::ALLOW;
+		}
 		if ( 'flag' === $mode ) {
 			return self::ALLOW === $action ? self::ALLOW : self::FLAG;
 		}

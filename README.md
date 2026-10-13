@@ -18,10 +18,10 @@ collector from `https://app.volance.com/trace.js`.
 | Area | Behaviour |
 |------|-----------|
 | Forms | WordPress login, registration, lost password, comments; WooCommerce login, registration, checkout; Contact Form 7; WPForms; Gravity Forms |
-| Modes | Per form: `observe` (log only), `flag` (hold / mark spam), `block` (refuse) |
+| Modes | Per form: `observe` (log only), `flag` (hold comments; elsewhere logs the flag and fires `volance_detection_flagged`), `block` (refuse) |
 | Paths | Any page or REST route, one rule per line (`block /wp-json/wp/v2/comments`, `flag /pricing/*`); administrators exempt |
 | Dashboard | Overview stats, Activity log with evidence per entry, CSV export |
-| Policy | Read and set the workspace allow / block thresholds (`/api/trace/config`) |
+| Policy | Workspace enforcement toggle and the fixed allow / block thresholds (`/api/trace/config`). Flag and block act only while workspace enforcement is on |
 | Agents | Web Bot Auth signature headers forwarded so declared agents are recognised |
 | Plan | Plan and monthly usage (`/api/trace/usage`) |
 | Safety | Fails open on any API error, timeout or 429 |

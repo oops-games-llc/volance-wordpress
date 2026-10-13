@@ -116,9 +116,6 @@ class Volance_Detection_Admin_Plan {
 			__( 'Agent decisions per month', 'volance-detection' ) => static function ( $p ) {
 				return isset( $p['monthlyDecisions'] ) ? number_format_i18n( (int) $p['monthlyDecisions'] ) : '-';
 			},
-			__( 'Monetization fee', 'volance-detection' ) => static function ( $p ) {
-				return isset( $p['monetizeFeePct'] ) ? (float) $p['monetizeFeePct'] . '%' : '-';
-			},
 			__( 'Support', 'volance-detection' )          => static function ( $p ) {
 				return (string) ( $p['support'] ?? '' );
 			},

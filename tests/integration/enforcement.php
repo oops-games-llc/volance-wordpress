@@ -63,6 +63,7 @@ add_filter(
 					'evidence'       => array( 'events' => 3, 'behavioural' => true ),
 					'signals'        => array( array( 'id' => 'webdriver', 'layer' => 1, 'value' => 0, 'fired' => true, 'detail' => 'test' ) ),
 					'requestId'      => 'req_' . count( $GLOBALS['mock']['calls'] ),
+							'enforce'        => ! isset( $GLOBALS['mock']['enforce'] ) || $GLOBALS['mock']['enforce'],
 					'trustToken'     => 'tok_secret',
 				)
 			);
@@ -224,6 +225,19 @@ $blocked = array_filter( $rows, static function ( $r ) {
 t( 'log records applied=block rows', count( $blocked ) >= 2 );
 t( 'log never stores the trust token or the IP', false === strpos( wp_json_encode( $rows ), 'tok_secret' ) && false === strpos( wp_json_encode( $rows ), '203.0.113.9' ) );
 
+// --- Workspace enforcement off ----------------------------------------------------
+configure( array( 'login' => 'block' ) );
+Volance_Detection_Forms::init();
+reset_request();
+$GLOBALS['mock']['action']  = 'block';
+$GLOBALS['mock']['enforce'] = false;
+$_POST = array( 'log' => 'vtest', 'pwd' => 'Passw0rd!xyz123', 'volance_snapshot' => wp_slash( $good_snapshot ) );
+$user = wp_authenticate( 'vtest', 'Passw0rd!xyz123' );
+t( 'enforcement off: block mode does not block', $user instanceof WP_User );
+unset( $GLOBALS['mock']['enforce'] );
+$GLOBALS['mock']['action'] = 'allow';
+echo 'WordPress ' . get_bloginfo( 'version' ) . ' / PHP ' . PHP_VERSION . "\n";
+
 // --- Protected paths ---------------------------------------------------------------
 function configure_paths( $text, $on_no_evidence = 'score' ) {
 	configure( array(), $on_no_evidence );
@@ -300,7 +314,7 @@ foreach ( array( 'overview', 'activity', 'setup', 'plan', 'help' ) as $tab ) {
 		$html = ob_get_clean();
 		t( "admin tab '{$tab}' renders", strlen( $html ) > 200 );
 		if ( 'setup' === $tab ) {
-			t( 'setup shows mode selects and policy panel', false !== strpos( $html, 'name="volance_detection_settings[forms][login]"' ) && false !== strpos( $html, 'Workspace policy' ) && false !== strpos( $html, 'value="always"' ) );
+			t( 'setup shows mode selects and policy panel', false !== strpos( $html, 'name="volance_detection_settings[forms][login]"' ) && false !== strpos( $html, 'Workspace policy' ) && false !== strpos( $html, 'fixed by Volance' ) && false === strpos( $html, 'name="policy_allow"' ) && false !== strpos( $html, 'value="always"' ) );
 			t( 'setup never prints the secret key', false === strpos( $html, 'sk_zyxwvuts98765432' ) );
 		}
 		if ( 'activity' === $tab ) {

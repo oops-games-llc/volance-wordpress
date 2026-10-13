@@ -141,7 +141,12 @@ class Volance_Detection_Scorer {
 		$meta        = isset( $data['evidence'] ) && is_array( $data['evidence'] ) ? $data['evidence'] : array();
 		$compact     = Volance_Detection_Response::compact( $data );
 		$recommended = Volance_Detection_Decision::normalize_action( $data['action'] ?? '' );
-		$applied     = Volance_Detection_Decision::resolve( $mode, $recommended );
+		$enforce     = ! array_key_exists( 'enforce', $data ) || (bool) $data['enforce'];
+		$applied     = Volance_Detection_Decision::resolve( $mode, $recommended, $enforce );
+		$note        = isset( $options['note'] ) ? (string) $options['note'] : '';
+		if ( ! $enforce && Volance_Detection_Decision::is_synchronous( $mode ) && Volance_Detection_Decision::ALLOW !== $recommended ) {
+			$note = trim( $note . ' [' . __( 'Workspace enforcement is off', 'volance-detection' ) . ']' );
+		}
 		$score       = isset( $data['score'] ) && is_numeric( $data['score'] ) ? (float) $data['score'] : null;
 		$label       = isset( $data['classification']['label'] ) && is_string( $data['classification']['label'] ) ? $data['classification']['label'] : '';
 
@@ -160,7 +165,7 @@ class Volance_Detection_Scorer {
 				'response'    => $compact,
 				'action'      => $recommended,
 				'applied'     => $applied,
-				'note'        => isset( $options['note'] ) ? substr( (string) $options['note'], 0, 190 ) : '',
+				'note'        => substr( $note, 0, 190 ),
 			),
 			$recommended,
 			$applied,

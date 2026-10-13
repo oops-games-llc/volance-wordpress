@@ -184,6 +184,12 @@ class Volance_Detection_Client {
 			/* translators: %d: HTTP status code. */
 			return sprintf( __( 'Volance had a problem (HTTP %d).', 'volance-detection' ), $status );
 		}
+		if ( 400 === $status || 409 === $status || 422 === $status ) {
+			$message = isset( $data['error'] ) && is_string( $data['error'] ) ? $data['error'] : '';
+			if ( '' !== $message ) {
+				return substr( $message, 0, 190 );
+			}
+		}
 		/* translators: %d: HTTP status code. */
 		return sprintf( __( 'Volance rejected the request (HTTP %d).', 'volance-detection' ), $status );
 	}

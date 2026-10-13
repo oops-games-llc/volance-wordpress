@@ -345,6 +345,7 @@ check( 'decision: block mode passes block through', 'block' === Volance_Detectio
 check( 'decision: block mode keeps flag as flag', 'flag' === Volance_Detection_Decision::resolve( 'block', 'flag' ) );
 check( 'decision: junk action is allow', 'allow' === Volance_Detection_Decision::resolve( 'block', 'DROP TABLE' ) && 'allow' === Volance_Detection_Decision::resolve( 'block', null ) );
 check( 'decision: flag and block are synchronous, observe is not', Volance_Detection_Decision::is_synchronous( 'flag' ) && Volance_Detection_Decision::is_synchronous( 'block' ) && ! Volance_Detection_Decision::is_synchronous( 'observe' ) );
+check( 'decision: enforcement off allows everything', 'allow' === Volance_Detection_Decision::resolve( 'block', 'block', false ) && 'allow' === Volance_Detection_Decision::resolve( 'flag', 'flag', false ) );
 
 function client_with_action( $action ) {
 	$client = ok_client();
@@ -367,6 +368,19 @@ $rows = array();
 list( $scorer ) = make_scorer( $rows, client_with_action( 'flag' ) );
 $res = $scorer->evaluate( 'comments', $good, array(), array( 'mode' => 'flag' ) );
 check( 'evaluate flag mode: applied flag', 'flag' === $res['applied'] );
+$rows = array();
+$client = client_with_action( 'block' );
+$client->score_reply['data']['enforce'] = false;
+list( $scorer ) = make_scorer( $rows, $client );
+$res = $scorer->evaluate( 'login', $good, array(), array( 'mode' => 'block' ) );
+check( 'workspace enforcement off: recommends block, applies allow, notes why', 'block' === $res['recommended'] && 'allow' === $res['applied'] && false !== strpos( $rows[0]['note'], 'enforcement is off' ) );
+
+$rows = array();
+$client = client_with_action( 'block' );
+$client->score_reply['data']['enforce'] = true;
+list( $scorer ) = make_scorer( $rows, $client );
+$res = $scorer->evaluate( 'login', $good, array(), array( 'mode' => 'block' ) );
+check( 'workspace enforcement on: block applies', 'block' === $res['applied'] );
 
 $rows = array();
 $client = client_with_action( 'block' );

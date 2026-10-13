@@ -17,10 +17,10 @@ Volance Detection connects your site to the Volance service. A small script reco
 **What you can do**
 
 * **Protect forms.** WordPress login, registration, lost password and comments; WooCommerce login, registration and checkout; Contact Form 7; WPForms; Gravity Forms.
-* **Choose a mode per form.** *Observe* (score and log only), *Flag* (hold comments for moderation, mark spam, never lock anyone out) or *Block* (refuse the submission with a clear message).
+* **Choose a mode per form.** *Observe* (score and log only), *Flag* (hold comments for moderation; on other forms it logs the flag and fires a hook you can use, and never locks anyone out) or *Block* (refuse the submission with a clear message).
 * **Protect any page or REST endpoint.** List paths such as `/wp-json/wp/v2/comments` or `/pricing/*`, each with its own mode. Administrators are exempt.
 * **See what is happening.** An Overview dashboard with totals, trends and top forms, an Activity log with the evidence behind each score, and a CSV export.
-* **Set your thresholds.** Read and change your Volance workspace's allow and block thresholds without leaving WordPress.
+* **Control enforcement.** Turn your Volance workspace's enforcement on or off and see its allow and block thresholds without leaving WordPress.
 * **Recognise signed agents.** Requests from AI agents that identify themselves with Web Bot Auth signature headers are forwarded to Volance so they can be classified as declared agents.
 * **Watch your usage.** See your plan and how many scores you have used this month.
 * **Fails open.** If Volance is slow, down or over quota, your forms work exactly as before.
@@ -47,11 +47,11 @@ If you prefer, define `VOLANCE_DETECTION_SECRET_KEY` in `wp-config.php` instead 
 
 = Does this plugin block bots? =
 
-Only if you tell it to. Every form starts in *Observe* mode, which never changes what a visitor sees. Switch a form to *Flag* or *Block* to act on Volance's recommendation. In *Flag* mode a blocked-looking submission is held (comments) or marked as spam rather than refused.
+Only if you tell it to. Every form starts in *Observe* mode, which never changes what a visitor sees. Switch a form to *Flag* or *Block* to act on Volance's recommendation. In *Flag* mode a suspicious comment is held for moderation; on other forms the flag is logged and the `volance_detection_flagged` action fires, but nothing is refused. Flag and Block only act while enforcement is switched on in your Volance workspace (Setup tab); with it off, or paused because your monthly quota is used up, Volance still scores and the plugin logs the recommendation.
 
 = What happens if a real person gets blocked? =
 
-Blocking follows the thresholds set in your Volance workspace; change them on the Setup tab. A blocked visitor sees a short message and can try again. Administrators are never blocked on protected paths. Start in Observe or Flag mode and review the Activity log before using Block.
+Blocking follows the allow and block thresholds set by Volance (currently 70 and 40), and only while enforcement is on for your workspace. A blocked visitor sees a short message and can try again. Administrators are never blocked on protected paths. Start in Observe or Flag mode and review the Activity log before using Block.
 
 = What if a visitor's browser sends no evidence? =
 
@@ -91,7 +91,7 @@ The plugin removes its settings, log table and scheduled task. Data already stor
 
 = Which features are not in the plugin yet? =
 
-Session lists, the audit log, team members, billing and 402 pay-per-request agent monetization are available in the Volance portal at https://app.volance.com. The Help tab links to them.
+Session lists, the audit log, team members and billing are available in the Volance portal at https://app.volance.com. Agent monetization (402 pay-per-request) is planned for a later plugin release; see https://volance.com/docs/agent-monetization. The Help tab links to these.
 
 == External services ==
 
@@ -108,7 +108,7 @@ This plugin connects to the Volance service, operated by Oops Games LLC, to esti
 
 It never contains typed characters, form values, clipboard contents, page text or cookie values.
 
-**3. Volance account calls (administrators).** The Test connection button, the plan and usage tab, and the workspace policy panel call https://app.volance.com/api/trace/config (read and, when you save thresholds, update), /session and /usage from your server with your keys. A scheduled task also checks your workspace settings twice a day. Token verification (https://app.volance.com/api/trace/verify-token) is available to developers through the plugin's code only.
+**3. Volance account calls (administrators).** The Test connection button, the plan and usage tab, and the workspace policy panel call https://app.volance.com/api/trace/config (read and, when you save the enforcement setting, update), /session and /usage from your server with your keys. A scheduled task also checks your workspace settings twice a day. Token verification (https://app.volance.com/api/trace/verify-token) is available to developers through the plugin's code only.
 
 Volance Terms: https://volance.com/terms
 Volance Privacy Policy: https://volance.com/privacy
@@ -117,7 +117,7 @@ Volance Privacy Policy: https://volance.com/privacy
 
 1. Overview: totals, trends and top forms.
 2. Activity log with the evidence behind each score.
-3. Setup: keys, a mode for each form, protected paths and workspace thresholds.
+3. Setup: keys, a mode for each form, protected paths and workspace policy.
 
 == Changelog ==
 
@@ -126,7 +126,7 @@ Volance Privacy Policy: https://volance.com/privacy
 * New: protect WooCommerce login, registration and checkout; Contact Form 7; WPForms; Gravity Forms; and lost password.
 * New: protected paths for any page or REST endpoint, with a mode per path.
 * New: Overview dashboard, evidence for each activity entry, CSV export and a Help tab.
-* New: edit the workspace allow and block thresholds from WordPress.
+* New: turn workspace enforcement on or off from WordPress and see the fixed allow and block thresholds. Flag and Block only act while workspace enforcement is on.
 * New: forward Web Bot Auth signed-agent headers so declared agents are recognised.
 * New: option to score submissions that arrive without browser evidence, and an "Always on" consent mode.
 * New: hooks `volance_detection_decision`, `_flagged`, `_blocked` and filters `volance_detection_block_message`, `_skip_user`, `_load_collector`.

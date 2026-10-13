@@ -393,7 +393,7 @@ class Volance_Detection_Admin {
 						$mode_labels = array(
 							'off'     => __( 'Off', 'volance-detection' ),
 							'observe' => __( 'Observe (log only)', 'volance-detection' ),
-							'flag'    => __( 'Flag (hold or mark suspicious ones)', 'volance-detection' ),
+							'flag'    => __( 'Flag (hold comments, log the rest)', 'volance-detection' ),
 							'block'   => __( 'Block (refuse when Volance says block)', 'volance-detection' ),
 						);
 						foreach ( Volance_Detection_Settings::form_keys() as $key ) :
@@ -479,16 +479,22 @@ class Volance_Detection_Admin {
 		$block   = isset( $data['thresholds']['block'] ) ? (int) $data['thresholds']['block'] : 40;
 		$enabled = ! empty( $data['enabled'] );
 		?>
-		<p class="description"><?php esc_html_e( 'These settings live in your Volance workspace and also apply to anything else that uses your keys. A score at or above the allow threshold is allowed, below the block threshold is blocked, and in between is flagged.', 'volance-detection' ); ?></p>
+		<p class="description"><?php esc_html_e( 'These settings live in your Volance workspace and also apply to anything else that uses your keys. Flag and Block only act while workspace enforcement is on; with it off (or paused because your monthly quota is used up) Volance still scores and the plugin still logs the recommendation, but nothing is held or refused.', 'volance-detection' ); ?></p>
 		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="volance_detection_policy" />
 			<?php wp_nonce_field( 'volance_detection_policy' ); ?>
 			<p><label><input type="checkbox" name="policy_enabled" value="1" <?php checked( $enabled ); ?> /> <?php esc_html_e( 'Enforcement enabled in the workspace', 'volance-detection' ); ?></label></p>
 			<p>
-				<label for="volance-allow"><?php esc_html_e( 'Allow at or above', 'volance-detection' ); ?></label>
-				<input id="volance-allow" type="number" min="0" max="100" name="policy_allow" value="<?php echo esc_attr( (string) $allow ); ?>" class="small-text" />
-				<label for="volance-block"><?php esc_html_e( 'Block below', 'volance-detection' ); ?></label>
-				<input id="volance-block" type="number" min="0" max="100" name="policy_block" value="<?php echo esc_attr( (string) $block ); ?>" class="small-text" />
+				<?php
+				echo esc_html(
+					sprintf(
+						/* translators: 1: allow threshold, 2: block threshold. */
+						__( 'Thresholds are fixed by Volance for now: a score of %1$d or more is allowed, below %2$d is blocked, and in between is flagged.', 'volance-detection' ),
+						$allow,
+						$block
+					)
+				);
+				?>
 			</p>
 			<?php submit_button( __( 'Save policy to Volance', 'volance-detection' ), 'secondary', 'submit', false ); ?>
 		</form>
@@ -507,20 +513,19 @@ class Volance_Detection_Admin {
 		}
 		check_admin_referer( 'volance_detection_policy' );
 
-		$allow = isset( $_POST['policy_allow'] ) ? (int) $_POST['policy_allow'] : 70; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- cast to int; nonce checked above.
-		$block = isset( $_POST['policy_block'] ) ? (int) $_POST['policy_block'] : 40; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- cast to int; nonce checked above.
-		$allow = max( 0, min( 100, $allow ) );
-		$block = max( 0, min( 100, $block ) );
-
+		// Volance freezes the thresholds for now, so send back what the workspace already has.
+		$client = new Volance_Detection_Client( Volance_Detection_Settings::public_key(), Volance_Detection_Settings::secret_key() );
 		$result = array(
 			'ok'      => false,
 			'message' => '',
 		);
-		if ( $block > $allow ) {
-			$result['message'] = __( 'The block threshold cannot be higher than the allow threshold.', 'volance-detection' );
+		$config = $client->config();
+		if ( ! $config['ok'] ) {
+			$result['message'] = $config['error'];
 		} else {
-			$client = new Volance_Detection_Client( Volance_Detection_Settings::public_key(), Volance_Detection_Settings::secret_key() );
-			$saved  = $client->set_config(
+			$allow = isset( $config['data']['thresholds']['allow'] ) ? (int) $config['data']['thresholds']['allow'] : 70;
+			$block = isset( $config['data']['thresholds']['block'] ) ? (int) $config['data']['thresholds']['block'] : 40;
+			$saved = $client->set_config(
 				array(
 					'enabled'    => ! empty( $_POST['policy_enabled'] ),
 					'thresholds' => array(
@@ -531,8 +536,7 @@ class Volance_Detection_Admin {
 			);
 			$result['ok']      = $saved['ok'];
 			$result['message'] = $saved['ok'] ? __( 'Policy saved to Volance.', 'volance-detection' ) : $saved['error'];
-		}
-		set_transient( 'volance_detection_test_' . get_current_user_id(), $result, 120 );
+		}		set_transient( 'volance_detection_test_' . get_current_user_id(), $result, 120 );
 		wp_safe_redirect( self::url( 'setup' ) );
 		exit;
 	}
